@@ -9,7 +9,7 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
-    "@llm-inference-platform/types": "workspace:*"
+    "@llm-inference-platform/types": "file:../../shared/types"
   },
   "devDependencies": {
     "typescript": "^5.6.0",
