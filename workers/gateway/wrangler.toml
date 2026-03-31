@@ -8,15 +8,57 @@ command = "npm run build"
 [ai]
 binding = "AI"
 
-[[durable_objects]]
-name = "RATE_LIMITER"
-class_name = "RateLimiter"
-binding = "RATE_LIMITER"
+[durable_objects]
+bindings = [
+  { name = "RATE_LIMITER", class_name = "RateLimiter" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RateLimiter"]
 
 [[services]]
 binding = "ROUTER"
 service = "llm-router"
 
 [[services]]
+binding = "OBSERVABILITY"
+service = "llm-observability"
+
+[env.staging]
+name = "llm-gateway-staging"
+
+[env.staging.ai]
+binding = "AI"
+
+[env.staging.durable_objects]
+bindings = [
+  { name = "RATE_LIMITER", class_name = "RateLimiter" }
+]
+
+[[env.staging.services]]
+binding = "ROUTER"
+service = "llm-router-staging"
+
+[[env.staging.services]]
+binding = "OBSERVABILITY"
+service = "llm-observability-staging"
+
+[env.production]
+name = "llm-gateway"
+
+[env.production.ai]
+binding = "AI"
+
+[env.production.durable_objects]
+bindings = [
+  { name = "RATE_LIMITER", class_name = "RateLimiter" }
+]
+
+[[env.production.services]]
+binding = "ROUTER"
+service = "llm-router"
+
+[[env.production.services]]
 binding = "OBSERVABILITY"
 service = "llm-observability"

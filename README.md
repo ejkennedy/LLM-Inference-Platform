@@ -115,6 +115,19 @@ The suite covers router policy selection, JWT authentication helpers, and the Du
 
 The repo includes [ci.yml](/Users/ethan/Dev/LLM-Inference-Platform/.github/workflows/ci.yml) to run `npm ci`, `npm test`, and `npm run build` on pushes and pull requests.
 
+## CD
+
+The repo includes [deploy.yml](/Users/ethan/Dev/LLM-Inference-Platform/.github/workflows/deploy.yml) with this flow:
+
+- Push to `main`: verify, then deploy all workers to `staging`
+- Release publish or manual dispatch: verify, then deploy all workers to `production`
+
+GitHub configuration expected by the workflow:
+
+- Repository secret: `CLOUDFLARE_API_TOKEN`
+- Repository or environment variable: `CLOUDFLARE_ACCOUNT_ID`
+- GitHub environments: `staging` and `production`
+
 ## Remaining Gaps
 
 - AI Gateway integration and external-provider fallback.

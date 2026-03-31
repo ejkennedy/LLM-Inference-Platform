@@ -17,7 +17,7 @@ import {
 } from "./auth";
 
 export interface Env {
-  AI: Ai;
+  AI?: Ai;
   MODEL_CATALOGUE: KVNamespace;
   ROUTER: Fetcher;
   OBSERVABILITY: Fetcher;
@@ -151,11 +151,13 @@ export default {
       }
 
       const streamEnabled = payload.stream ?? true;
-      const upstream = await env.AI.run(routing.cfModelId as keyof AiModels, {
-        messages,
-        stream: streamEnabled,
-        max_tokens: payload.maxTokens ?? 512
-      });
+      const upstream = env.AI
+        ? await env.AI.run(routing.cfModelId as keyof AiModels, {
+            messages,
+            stream: streamEnabled,
+            max_tokens: payload.maxTokens ?? 512
+          })
+        : createMockAiResponse(messages, streamEnabled);
 
       if (streamEnabled) {
         if (upstream instanceof ReadableStream) {
@@ -495,6 +497,24 @@ function normalizeJsonCompletion(
     requestId,
     model: routing.resolvedModel,
     outputText: candidate.response ?? JSON.stringify(response)
+  };
+}
+
+function createMockAiResponse(
+  messages: Array<{ content: string }>,
+  streamEnabled: boolean
+): AsyncIterable<AiStreamChunk> | { response: string } {
+  const lastMessage = messages.at(-1)?.content ?? "No prompt provided.";
+  const mockText = `Local gateway dev mode: Workers AI binding is unavailable, so this is a mock response to "${lastMessage}".`;
+
+  if (!streamEnabled) {
+    return { response: mockText };
+  }
+
+  return {
+    async *[Symbol.asyncIterator]() {
+      yield { response: mockText, done: true };
+    }
   };
 }
 
