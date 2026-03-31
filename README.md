@@ -140,8 +140,8 @@ The repo includes [deploy.yml](/Users/ethan/Dev/LLM-Inference-Platform/.github/w
 
 GitHub configuration expected by the workflow:
 
-- Repository secret: `CLOUDFLARE_API_TOKEN`
-- Repository or environment variable: `CLOUDFLARE_ACCOUNT_ID`
+- Repository or environment secret: `CLOUDFLARE_API_TOKEN` or `CF_API_TOKEN`
+- Repository or environment variable: `CLOUDFLARE_ACCOUNT_ID` or `CF_ACCOUNT_ID`
 - Environment variable: `STAGING_GATEWAY_URL`
 - Environment variable: `PRODUCTION_GATEWAY_URL`
 - GitHub environments: `staging` and `production`
