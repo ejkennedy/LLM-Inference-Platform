@@ -95,9 +95,17 @@ curl http://127.0.0.1:8787/v1/usage \
 npm run build
 ```
 
+## Test
+
+```bash
+npm test
+```
+
+The suite covers router policy selection, JWT authentication helpers, and the Durable Object rate-limit and budget state machine.
+
 ## CI
 
-The repo includes [ci.yml](/Users/ethan/Dev/LLM-Inference-Platform/.github/workflows/ci.yml) to run `npm ci` and `npm run build` on pushes and pull requests.
+The repo includes [ci.yml](/Users/ethan/Dev/LLM-Inference-Platform/.github/workflows/ci.yml) to run `npm ci`, `npm test`, and `npm run build` on pushes and pull requests.
 
 ## Remaining Gaps
 

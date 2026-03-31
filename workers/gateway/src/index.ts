@@ -109,10 +109,10 @@ export default {
             {
               requestId,
               status: "error",
-              message: rateLimit.remaining > 0 ? "budget exceeded" : "rate limit exceeded"
+              message: rateLimit.reason === "budget" ? "budget exceeded" : "rate limit exceeded"
             },
             {
-              status: rateLimit.remaining > 0 ? 402 : 429,
+              status: rateLimit.reason === "budget" ? 402 : 429,
               headers: rateLimit.retryAfterSeconds
                 ? { "Retry-After": String(rateLimit.retryAfterSeconds) }
                 : undefined
@@ -274,6 +274,7 @@ export class RateLimiter {
 
     return json<RateLimitCheckResponse>({
       allow,
+      reason: allow ? "allowed" : count > 60 ? "rate_limit" : "budget",
       remaining: allow ? Math.max(60 - count, 0) : Math.max(nextRemainingBudget, 0),
       retryAfterSeconds: count > 60 ? 60 - Math.floor((now % 60_000) / 1_000) : undefined,
       window: {
@@ -325,7 +326,7 @@ export class RateLimiter {
   }
 }
 
-async function authenticate(request: Request, env: Env): Promise<AuthClaims> {
+export async function authenticate(request: Request, env: Env): Promise<AuthClaims> {
   const authHeader = request.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     throw errorResponse("missing bearer token", 401);
@@ -559,12 +560,12 @@ function normalizeJsonCompletion(
   };
 }
 
-function estimatePromptTokens(messages: Array<{ content: string }>): number {
+export function estimatePromptTokens(messages: Array<{ content: string }>): number {
   const totalChars = messages.reduce((sum, message) => sum + message.content.length, 0);
   return Math.max(Math.ceil(totalChars / 4), 1);
 }
 
-function estimateTextTokens(text: string): number {
+export function estimateTextTokens(text: string): number {
   return Math.max(Math.ceil(text.length / 4), 1);
 }
 

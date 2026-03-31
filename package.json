@@ -13,11 +13,14 @@
     "dev:observability": "cd workers/observability && npm run dev",
     "token:dev": "node scripts/generate_dev_jwt.mjs",
     "lint": "echo 'Add lint scripts later'",
-    "test": "echo 'Add tests later'"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.2026.0",
+    "@types/node": "^25.5.0",
     "typescript": "^5.6.0",
-    "wrangler": "^3.0.0"
+    "vitest": "^4.1.2",
+    "wrangler": "^4.78.0"
   }
 }

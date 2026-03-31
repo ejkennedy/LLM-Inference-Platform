@@ -10,10 +10,10 @@ export interface Env {
 }
 
 const CACHE_TTL_MS = 60_000;
-const DEFAULT_MODEL_ID = "llama-3.1-8b";
-const POLICY_VERSION = "2026-03-31.v1";
+export const DEFAULT_MODEL_ID = "llama-3.1-8b";
+export const POLICY_VERSION = "2026-03-31.v1";
 
-const defaultCatalogue: Record<string, ModelCatalogueEntry> = {
+export const defaultCatalogue: Record<string, ModelCatalogueEntry> = {
   "llama-3.1-8b": {
     id: "llama-3.1-8b",
     provider: "workers-ai",
@@ -68,7 +68,7 @@ export default {
   }
 };
 
-function resolveRoute(
+export function resolveRoute(
   request: RouterRequest,
   catalogue: Record<string, ModelCatalogueEntry>
 ): RouterResponse {
@@ -144,7 +144,7 @@ async function getCatalogue(env: Env): Promise<Record<string, ModelCatalogueEntr
   return entries;
 }
 
-function estimateCost(request: RouterRequest, model: ModelCatalogueEntry): number {
+export function estimateCost(request: RouterRequest, model: ModelCatalogueEntry): number {
   const promptTokens = Math.max(request.promptTokensEstimate, 1);
   const completionTokens = Math.max(request.maxOutputTokens ?? 512, 1);
   const inputCost = (promptTokens / 1_000_000) * model.inputCostPerMtok * 100;

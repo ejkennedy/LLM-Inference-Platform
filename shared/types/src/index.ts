@@ -39,6 +39,7 @@ export type HealthResponse = {
 
 export type RateLimitCheckResponse = {
   allow: boolean;
+  reason: 'allowed' | 'rate_limit' | 'budget';
   remaining: number;
   retryAfterSeconds?: number;
   window: {
