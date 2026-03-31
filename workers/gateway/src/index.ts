@@ -15,6 +15,10 @@ import {
   estimatePromptTokens,
   estimateTextTokens
 } from "./auth";
+import {
+  normalizeIterableAiStream,
+  normalizeReadableAiStream
+} from "./sse";
 
 export interface Env {
   AI?: Ai;
@@ -161,6 +165,7 @@ export default {
 
       if (streamEnabled) {
         if (upstream instanceof ReadableStream) {
+          const response = await normalizeReadableAiStream(upstream, requestId, routing);
           ctx.waitUntil(
             recordSpend(env, claims.sub, {
               requestId,
@@ -168,15 +173,24 @@ export default {
             })
           );
 
+          return withCors(response, requestId);
+        }
+
+        if (!isAsyncIterable(upstream)) {
           return withCors(
-            new Response(upstream, {
-              headers: sseHeaders(requestId, routing)
-            }),
+            json(
+              {
+                requestId,
+                status: "error",
+                message: "Workers AI returned an unsupported streaming response"
+              },
+              { status: 502 }
+            ),
             requestId
           );
         }
 
-        const response = await normalizeAiStream(upstream, requestId, routing);
+        const response = await normalizeIterableAiStream(upstream, requestId, routing);
         ctx.waitUntil(
           recordSpend(env, claims.sub, {
             requestId,
@@ -410,67 +424,6 @@ async function publishObservation(env: Env, event: ObservabilityEvent): Promise<
   }
 }
 
-async function normalizeAiStream(
-  stream: AsyncIterable<AiStreamChunk> | unknown,
-  requestId: string,
-  routing: RouterResponse
-): Promise<Response> {
-  if (!isAsyncIterable(stream)) {
-    return json(
-      {
-        requestId,
-        status: "error",
-        message: "Workers AI returned an unsupported response shape"
-      },
-      { status: 502 }
-    );
-  }
-
-  const encoder = new TextEncoder();
-  let completionText = "";
-  const readable = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      controller.enqueue(encoder.encode(toSseFrame("meta", { requestId, model: routing.resolvedModel })));
-
-      for await (const chunk of stream) {
-        if (typeof chunk === "string") {
-          completionText += chunk;
-          controller.enqueue(encoder.encode(toSseFrame("token", { delta: chunk })));
-          continue;
-        }
-
-        if (chunk.error) {
-          controller.enqueue(encoder.encode(toSseFrame("error", { message: chunk.error })));
-          break;
-        }
-
-        if (chunk.response) {
-          completionText += chunk.response;
-          controller.enqueue(encoder.encode(toSseFrame("token", { delta: chunk.response })));
-        }
-
-        if (chunk.done) {
-          break;
-        }
-      }
-
-      controller.enqueue(
-        encoder.encode(
-          toSseFrame("summary", {
-            estimatedCompletionTokens: estimateTextTokens(completionText)
-          })
-        )
-      );
-      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-      controller.close();
-    }
-  });
-
-  return new Response(readable, {
-    headers: sseHeaders(requestId, routing)
-  });
-}
-
 function normalizeJsonCompletion(
   response: unknown,
   requestId: string,
@@ -500,6 +453,12 @@ function normalizeJsonCompletion(
   };
 }
 
+function isAsyncIterable(
+  value: unknown
+): value is AsyncIterable<string | { response?: string | null; done?: boolean; error?: string; usage?: Record<string, unknown> }> {
+  return Boolean(value) && typeof (value as AsyncIterable<unknown>)[Symbol.asyncIterator] === "function";
+}
+
 function createMockAiResponse(
   messages: Array<{ content: string }>,
   streamEnabled: boolean
@@ -516,14 +475,6 @@ function createMockAiResponse(
       yield { response: mockText, done: true };
     }
   };
-}
-
-function isAsyncIterable(value: unknown): value is AsyncIterable<AiStreamChunk> {
-  return Boolean(value) && typeof (value as AsyncIterable<AiStreamChunk>)[Symbol.asyncIterator] === "function";
-}
-
-function toSseFrame(event: string, data: unknown): string {
-  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
 function sseHeaders(requestId: string, routing: RouterResponse): HeadersInit {

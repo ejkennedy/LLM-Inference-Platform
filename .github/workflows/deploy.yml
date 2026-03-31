@@ -72,6 +72,16 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
+  smoke-staging:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'staging')
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - name: Smoke check gateway health
+        run: curl --fail --silent --show-error "${{ vars.STAGING_GATEWAY_URL }}/health"
+
   deploy-production:
     if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'production')
     needs: verify
@@ -102,3 +112,13 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+  smoke-production:
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'production')
+    needs: deploy-production
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Smoke check gateway health
+        run: curl --fail --silent --show-error "${{ vars.PRODUCTION_GATEWAY_URL }}/health"

@@ -13,6 +13,7 @@ Cloudflare Workers monorepo for a portfolio-grade LLM gateway. The current slice
 
 - `GET /health` on each worker returns a lightweight health payload.
 - `POST /v1/chat` accepts chat messages, resolves a model through the router worker, and streams Workers AI output.
+- Streaming responses are normalized into gateway-owned SSE events: `meta`, `token`, `usage`, `summary`, then `[DONE]`.
 - `GET /v1/usage` returns the authenticated user’s current minute request count and tracked budget state.
 - Request IDs are generated at the edge and returned via `X-Request-Id`.
 - A Durable Object-backed limiter enforces a simple per-user requests-per-minute guard.
@@ -116,7 +117,15 @@ npm run build
 npm test
 ```
 
-The suite covers router policy selection, JWT authentication helpers, and the Durable Object rate-limit and budget state machine.
+The suite covers router policy selection, JWT authentication helpers, SSE normalization, and the Durable Object rate-limit and budget state machine.
+
+## Smoke Test
+
+```bash
+npm run smoke:local
+```
+
+This checks `/health`, `/v1/usage`, and `/v1/chat` against a running local gateway and validates the normalized SSE contract.
 
 ## CI
 
@@ -133,6 +142,8 @@ GitHub configuration expected by the workflow:
 
 - Repository secret: `CLOUDFLARE_API_TOKEN`
 - Repository or environment variable: `CLOUDFLARE_ACCOUNT_ID`
+- Environment variable: `STAGING_GATEWAY_URL`
+- Environment variable: `PRODUCTION_GATEWAY_URL`
 - GitHub environments: `staging` and `production`
 
 ## Remaining Gaps
