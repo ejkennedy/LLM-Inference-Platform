@@ -4,5 +4,7 @@ dist/
 *.tsbuildinfo
 .DS_Store
 .coverage
+*.dev.vars
+**/.dev.vars
 **/dist/
 **/.wrangler

@@ -43,17 +43,18 @@ npm run dev:observability
 4. Start the gateway worker in another shell.
 
 ```bash
-npm run dev:gateway:remote
+npm run dev:gateway
 ```
 
-`router` and `observability` now run cleanly in local `wrangler dev` without requiring real Cloudflare resource IDs. `gateway` still needs remote mode for Workers AI-backed chat requests.
+`router` and `observability` run cleanly in local `wrangler dev` without requiring real Cloudflare resource IDs. `gateway` also runs locally now. If the Workers AI binding is unavailable, the gateway returns a mock response in local dev.
 
-5. Configure the gateway secret.
+5. Set up local auth once.
 
 ```bash
-cd workers/gateway
-wrangler secret put JWT_SECRET
+npm run setup:local-auth
 ```
+
+This writes a local-only `workers/gateway/.dev.vars` file with `JWT_SECRET=...`.
 
 6. Use an `HS256` JWT with claims shaped like:
 
@@ -70,7 +71,13 @@ wrangler secret put JWT_SECRET
 7. Generate a local dev token.
 
 ```bash
-npm run token:dev -- your-local-secret demo-user standard 500
+npm run token:dev
+```
+
+Or override the defaults:
+
+```bash
+npm run token:dev -- demo-user standard 500
 ```
 
 8. Call the gateway.

@@ -12,6 +12,7 @@
     "dev:gateway:remote": "cd workers/gateway && npm run dev:remote",
     "dev:router": "cd workers/router && npm run dev",
     "dev:observability": "cd workers/observability && npm run dev",
+    "setup:local-auth": "node scripts/setup_local_auth.mjs",
     "token:dev": "node scripts/generate_dev_jwt.mjs",
     "lint": "echo 'Add lint scripts later'",
     "test": "vitest run",
