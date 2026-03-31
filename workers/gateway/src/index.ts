@@ -1,10 +1,15 @@
 import type {
+  AuthClaims,
+  BudgetState,
   GatewayRequest,
   HealthResponse,
   ObservabilityEvent,
+  RateLimitCheckRequest,
   RateLimitCheckResponse,
   RouterRequest,
-  RouterResponse
+  RouterResponse,
+  SpendRequest,
+  UsageSummary
 } from "@llm-inference-platform/types";
 
 export interface Env {
@@ -13,6 +18,7 @@ export interface Env {
   ROUTER: Fetcher;
   OBSERVABILITY: Fetcher;
   RATE_LIMITER: DurableObjectNamespace;
+  JWT_SECRET?: string;
 }
 
 type AiStreamChunk =
@@ -31,117 +37,186 @@ const corsHeaders = {
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const url = new URL(request.url);
+    try {
+      const url = new URL(request.url);
 
-    if (request.method === "OPTIONS") {
-      return new Response(null, {
-        status: 204,
-        headers: corsHeaders
-      });
-    }
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: corsHeaders
+        });
+      }
 
-    if (request.method === "GET" && url.pathname === "/health") {
-      return json<HealthResponse>({
-        status: "ok",
-        service: "gateway",
-        ts: new Date().toISOString()
-      });
-    }
+      if (request.method === "GET" && url.pathname === "/health") {
+        return json<HealthResponse>({
+          status: "ok",
+          service: "gateway",
+          ts: new Date().toISOString()
+        });
+      }
 
-    if (request.method !== "POST" || url.pathname !== "/v1/chat") {
-      return withCors(new Response("Not Found", { status: 404 }));
-    }
+      if (request.method === "GET" && url.pathname === "/v1/usage") {
+        const claims = await authenticate(request, env);
+        const usage = await getUsageSummary(env, claims.sub);
+        return withCors(json(usage));
+      }
 
-    const payload = (await request.json()) as GatewayRequest;
-    const requestId = payload.requestId ?? request.headers.get("X-Request-Id") ?? crypto.randomUUID();
-    const messages = payload.messages ?? [];
-    const userId = payload.userId ?? "anonymous";
-    const promptTokensEstimate = estimatePromptTokens(messages);
+      if (request.method !== "POST" || url.pathname !== "/v1/chat") {
+        return withCors(new Response("Not Found", { status: 404 }));
+      }
 
-    if (messages.length === 0) {
-      return withCors(
-        json(
-          {
-            requestId,
-            status: "error",
-            message: "messages must contain at least one chat message"
-          },
-          { status: 400 }
-        ),
-        requestId
-      );
-    }
+      const claims = await authenticate(request, env);
+      const currentUsage = await getUsageSummary(env, claims.sub);
+      const payload = (await request.json()) as GatewayRequest;
+      const requestId = payload.requestId ?? request.headers.get("X-Request-Id") ?? crypto.randomUUID();
+      const messages = payload.messages ?? [];
+      const promptTokensEstimate = estimatePromptTokens(messages);
 
-    const rateLimit = await checkRateLimit(env, userId);
-    if (!rateLimit.allow) {
-      return withCors(
-        json(
-          {
-            requestId,
-            status: "error",
-            message: "rate limit exceeded"
-          },
-          {
-            status: 429,
-            headers: rateLimit.retryAfterSeconds
-              ? { "Retry-After": String(rateLimit.retryAfterSeconds) }
-              : undefined
-          }
-        ),
-        requestId
-      );
-    }
+      if (messages.length === 0) {
+        return withCors(
+          json(
+            {
+              requestId,
+              status: "error",
+              message: "messages must contain at least one chat message"
+            },
+            { status: 400 }
+          ),
+          requestId
+        );
+      }
 
-    const routing = await resolveRoute(env, {
-      requestId,
-      userTier: payload.userTier ?? "free",
-      budgetRemainingCents: payload.budgetRemainingCents ?? 100,
-      requestedModel: payload.model,
-      promptTokensEstimate,
-      maxOutputTokens: payload.maxTokens ?? 512,
-      providerAllowlist: ["workers-ai"]
-    });
-
-    ctx.waitUntil(
-      publishObservation(env, {
+      const routing = await resolveRoute(env, {
         requestId,
-        userId,
-        model: routing.resolvedModel,
-        promptTokens: promptTokensEstimate,
-        costCents: routing.expectedCostCents
-      })
-    );
+        userTier: claims.tier,
+        budgetRemainingCents: currentUsage.remainingBudgetCents || claims.budgetLimitCents,
+        requestedModel: payload.model,
+        promptTokensEstimate,
+        maxOutputTokens: payload.maxTokens ?? 512,
+        providerAllowlist: ["workers-ai"]
+      });
 
-    if (routing.via !== "workers-ai") {
+      const rateLimit = await checkRateLimit(env, {
+        requestId,
+        userId: claims.sub,
+        budgetLimitCents: claims.budgetLimitCents,
+        estimatedCostCents: routing.expectedCostCents
+      });
+
+      if (!rateLimit.allow) {
+        return withCors(
+          json(
+            {
+              requestId,
+              status: "error",
+              message: rateLimit.remaining > 0 ? "budget exceeded" : "rate limit exceeded"
+            },
+            {
+              status: rateLimit.remaining > 0 ? 402 : 429,
+              headers: rateLimit.retryAfterSeconds
+                ? { "Retry-After": String(rateLimit.retryAfterSeconds) }
+                : undefined
+            }
+          ),
+          requestId
+        );
+      }
+
+      ctx.waitUntil(
+        publishObservation(env, {
+          requestId,
+          userId: claims.sub,
+          model: routing.resolvedModel,
+          promptTokens: promptTokensEstimate,
+          costCents: routing.expectedCostCents
+        })
+      );
+
+      if (routing.via !== "workers-ai") {
+        return withCors(
+          json(
+            {
+              requestId,
+              status: "error",
+              message: "external provider fallback is not enabled in this slice"
+            },
+            { status: 501 }
+          ),
+          requestId
+        );
+      }
+
+      const streamEnabled = payload.stream ?? true;
+      const upstream = await env.AI.run(routing.cfModelId as keyof AiModels, {
+        messages,
+        stream: streamEnabled,
+        max_tokens: payload.maxTokens ?? 512
+      });
+
+      if (streamEnabled) {
+        if (upstream instanceof ReadableStream) {
+          ctx.waitUntil(
+            recordSpend(env, claims.sub, {
+              requestId,
+              estimatedCostCents: routing.expectedCostCents
+            })
+          );
+
+          return withCors(
+            new Response(upstream, {
+              headers: sseHeaders(requestId, routing)
+            }),
+            requestId
+          );
+        }
+
+        const response = await normalizeAiStream(upstream, requestId, routing);
+        ctx.waitUntil(
+          recordSpend(env, claims.sub, {
+            requestId,
+            estimatedCostCents: routing.expectedCostCents
+          })
+        );
+
+        return withCors(response, requestId);
+      }
+
+      const completion = normalizeJsonCompletion(upstream, requestId, routing);
+      ctx.waitUntil(
+        Promise.all([
+          recordSpend(env, claims.sub, {
+            requestId,
+            estimatedCostCents: routing.expectedCostCents,
+            actualCostCents: routing.expectedCostCents
+          }),
+          publishObservation(env, {
+            requestId,
+            userId: claims.sub,
+            model: routing.resolvedModel,
+            promptTokens: promptTokensEstimate,
+            completionTokens: estimateTextTokens(completion.outputText),
+            costCents: routing.expectedCostCents
+          })
+        ])
+      );
+
+      return withCors(json(completion), requestId);
+    } catch (error) {
+      if (error instanceof Response) {
+        return withCors(error);
+      }
+
+      console.error("Gateway request failed", error);
       return withCors(
         json(
           {
-            requestId,
             status: "error",
-            message: "external provider fallback is not enabled in this slice"
+            message: "internal gateway error"
           },
-          { status: 501 }
-        ),
-        requestId
+          { status: 500 }
+        )
       );
     }
-
-    const streamResponse = await env.AI.run(routing.cfModelId as keyof AiModels, {
-      messages,
-      stream: payload.stream ?? true,
-      max_tokens: payload.maxTokens ?? 512
-    });
-
-    if (streamResponse instanceof ReadableStream) {
-      return withCors(
-        new Response(streamResponse, {
-          headers: sseHeaders(requestId, routing)
-        }),
-        requestId
-      );
-    }
-
-    return withCors(await normalizeAiStream(streamResponse, requestId, routing), requestId);
   }
 };
 
@@ -150,27 +225,170 @@ export class RateLimiter {
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
-    if (request.method !== "POST" || url.pathname !== "/check") {
-      return new Response("Not Found", { status: 404 });
+
+    if (request.method === "POST" && url.pathname === "/check") {
+      const payload = (await request.json()) as RateLimitCheckRequest;
+      return this.handleCheck(payload);
     }
 
+    if (request.method === "POST" && url.pathname === "/spend") {
+      const payload = (await request.json()) as SpendRequest;
+      return this.handleSpend(payload);
+    }
+
+    if (request.method === "GET" && url.pathname === "/balance") {
+      return json(await this.readUsageSummary());
+    }
+
+    return new Response("Not Found", { status: 404 });
+  }
+
+  private async handleCheck(payload: RateLimitCheckRequest): Promise<Response> {
     const now = Date.now();
     const minuteBucket = Math.floor(now / 60_000);
-    const key = `rpm:${minuteBucket}`;
-    const count = ((await this.state.storage.get<number>(key)) ?? 0) + 1;
-    await this.state.storage.put(key, count);
-    const allow = count <= 60;
+    const requestKey = `rpm:${minuteBucket}`;
+    const budgetState = (await this.state.storage.get<BudgetState>("budget")) ?? {
+      budgetLimitCents: payload.budgetLimitCents,
+      estimatedSpendCents: 0,
+      remainingBudgetCents: payload.budgetLimitCents
+    };
+
+    const count = ((await this.state.storage.get<number>(requestKey)) ?? 0) + 1;
+    const nextEstimatedSpend = Number(
+      (budgetState.estimatedSpendCents + payload.estimatedCostCents).toFixed(4)
+    );
+    const nextRemainingBudget = Number(
+      (payload.budgetLimitCents - nextEstimatedSpend).toFixed(4)
+    );
+
+    const allow = count <= 60 && nextRemainingBudget >= 0;
+    if (allow) {
+      await this.state.storage.put(requestKey, count);
+      await this.state.storage.put("budget", {
+        budgetLimitCents: payload.budgetLimitCents,
+        estimatedSpendCents: nextEstimatedSpend,
+        remainingBudgetCents: nextRemainingBudget
+      } satisfies BudgetState);
+      await this.state.storage.put(`request:${payload.requestId}`, payload.estimatedCostCents);
+    }
 
     return json<RateLimitCheckResponse>({
       allow,
-      remaining: Math.max(60 - count, 0),
-      retryAfterSeconds: allow ? undefined : 60 - Math.floor((now % 60_000) / 1_000),
+      remaining: allow ? Math.max(60 - count, 0) : Math.max(nextRemainingBudget, 0),
+      retryAfterSeconds: count > 60 ? 60 - Math.floor((now % 60_000) / 1_000) : undefined,
       window: {
         type: "minute",
         bucket: minuteBucket
       }
     });
   }
+
+  private async handleSpend(payload: SpendRequest): Promise<Response> {
+    const budgetState = (await this.state.storage.get<BudgetState>("budget")) ?? {
+      budgetLimitCents: 0,
+      estimatedSpendCents: 0,
+      remainingBudgetCents: 0
+    };
+    const reserved = (await this.state.storage.get<number>(`request:${payload.requestId}`)) ?? payload.estimatedCostCents;
+    const actual = payload.actualCostCents ?? payload.estimatedCostCents;
+    const adjustedSpend = Number(
+      Math.max(budgetState.estimatedSpendCents - reserved + actual, 0).toFixed(4)
+    );
+
+    await this.state.storage.put("budget", {
+      budgetLimitCents: budgetState.budgetLimitCents,
+      estimatedSpendCents: adjustedSpend,
+      remainingBudgetCents: Number(
+        Math.max(budgetState.budgetLimitCents - adjustedSpend, 0).toFixed(4)
+      )
+    } satisfies BudgetState);
+    await this.state.storage.delete(`request:${payload.requestId}`);
+
+    return json(await this.readUsageSummary());
+  }
+
+  private async readUsageSummary(): Promise<UsageSummary> {
+    const minuteBucket = Math.floor(Date.now() / 60_000);
+    const requestCountCurrentMinute =
+      (await this.state.storage.get<number>(`rpm:${minuteBucket}`)) ?? 0;
+    const budget = (await this.state.storage.get<BudgetState>("budget")) ?? {
+      budgetLimitCents: 0,
+      estimatedSpendCents: 0,
+      remainingBudgetCents: 0
+    };
+
+    return {
+      ...budget,
+      requestCountCurrentMinute,
+      currentMinuteBucket: minuteBucket
+    };
+  }
+}
+
+async function authenticate(request: Request, env: Env): Promise<AuthClaims> {
+  const authHeader = request.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw errorResponse("missing bearer token", 401);
+  }
+
+  if (!env.JWT_SECRET) {
+    throw errorResponse("JWT_SECRET is not configured", 500);
+  }
+
+  const token = authHeader.slice("Bearer ".length);
+  const [header64, payload64, signature64] = token.split(".");
+  if (!header64 || !payload64 || !signature64) {
+    throw errorResponse("invalid JWT format", 401);
+  }
+
+  const header = JSON.parse(decodeBase64Url(header64)) as { alg?: string; typ?: string };
+  if (header.alg !== "HS256") {
+    throw errorResponse("unsupported JWT algorithm", 401);
+  }
+
+  const signingInput = `${header64}.${payload64}`;
+  const signatureBytes = base64UrlToBytes(signature64);
+  const signatureBuffer = new Uint8Array(signatureBytes.byteLength);
+  signatureBuffer.set(signatureBytes);
+  const secret = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(env.JWT_SECRET),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["verify"]
+  );
+  const valid = await crypto.subtle.verify(
+    "HMAC",
+    secret,
+    signatureBuffer,
+    new TextEncoder().encode(signingInput)
+  );
+
+  if (!valid) {
+    throw errorResponse("invalid JWT signature", 401);
+  }
+
+  const payload = JSON.parse(decodeBase64Url(payload64)) as Partial<AuthClaims>;
+  const now = Math.floor(Date.now() / 1000);
+  if (payload.nbf && payload.nbf > now) {
+    throw errorResponse("token not yet valid", 401);
+  }
+  if (payload.exp && payload.exp <= now) {
+    throw errorResponse("token expired", 401);
+  }
+  if (!payload.sub || !payload.tier || typeof payload.budgetLimitCents !== "number") {
+    throw errorResponse("token missing required claims", 401);
+  }
+
+  return {
+    sub: payload.sub,
+    tier: payload.tier,
+    budgetLimitCents: payload.budgetLimitCents,
+    tenantId: payload.tenantId,
+    iat: payload.iat,
+    exp: payload.exp,
+    nbf: payload.nbf
+  };
 }
 
 async function resolveRoute(env: Env, payload: RouterRequest): Promise<RouterResponse> {
@@ -191,10 +409,17 @@ async function resolveRoute(env: Env, payload: RouterRequest): Promise<RouterRes
   return (await response.json()) as RouterResponse;
 }
 
-async function checkRateLimit(env: Env, userId: string): Promise<RateLimitCheckResponse> {
-  const id = env.RATE_LIMITER.idFromName(userId);
+async function checkRateLimit(
+  env: Env,
+  payload: RateLimitCheckRequest
+): Promise<RateLimitCheckResponse> {
+  const id = env.RATE_LIMITER.idFromName(payload.userId);
   const response = await env.RATE_LIMITER.get(id).fetch("https://rate-limiter.internal/check", {
-    method: "POST"
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
   });
 
   if (!response.ok) {
@@ -202,6 +427,32 @@ async function checkRateLimit(env: Env, userId: string): Promise<RateLimitCheckR
   }
 
   return (await response.json()) as RateLimitCheckResponse;
+}
+
+async function recordSpend(env: Env, userId: string, payload: SpendRequest): Promise<void> {
+  const id = env.RATE_LIMITER.idFromName(userId);
+  const response = await env.RATE_LIMITER.get(id).fetch("https://rate-limiter.internal/spend", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Rate limiter spend update failed with status ${response.status}`);
+  }
+}
+
+async function getUsageSummary(env: Env, userId: string): Promise<UsageSummary> {
+  const id = env.RATE_LIMITER.idFromName(userId);
+  const response = await env.RATE_LIMITER.get(id).fetch("https://rate-limiter.internal/balance");
+
+  if (!response.ok) {
+    throw new Error(`Rate limiter balance lookup failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as UsageSummary;
 }
 
 async function publishObservation(env: Env, event: ObservabilityEvent): Promise<void> {
@@ -235,12 +486,14 @@ async function normalizeAiStream(
   }
 
   const encoder = new TextEncoder();
+  let completionText = "";
   const readable = new ReadableStream<Uint8Array>({
     async start(controller) {
       controller.enqueue(encoder.encode(toSseFrame("meta", { requestId, model: routing.resolvedModel })));
 
       for await (const chunk of stream) {
         if (typeof chunk === "string") {
+          completionText += chunk;
           controller.enqueue(encoder.encode(toSseFrame("token", { delta: chunk })));
           continue;
         }
@@ -251,6 +504,7 @@ async function normalizeAiStream(
         }
 
         if (chunk.response) {
+          completionText += chunk.response;
           controller.enqueue(encoder.encode(toSseFrame("token", { delta: chunk.response })));
         }
 
@@ -259,6 +513,13 @@ async function normalizeAiStream(
         }
       }
 
+      controller.enqueue(
+        encoder.encode(
+          toSseFrame("summary", {
+            estimatedCompletionTokens: estimateTextTokens(completionText)
+          })
+        )
+      );
       controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       controller.close();
     }
@@ -269,9 +530,42 @@ async function normalizeAiStream(
   });
 }
 
+function normalizeJsonCompletion(
+  response: unknown,
+  requestId: string,
+  routing: RouterResponse
+): {
+  requestId: string;
+  model: string;
+  outputText: string;
+} {
+  if (typeof response === "string") {
+    return {
+      requestId,
+      model: routing.resolvedModel,
+      outputText: response
+    };
+  }
+
+  if (!response || typeof response !== "object") {
+    throw errorResponse("Workers AI returned an unsupported JSON response", 502);
+  }
+
+  const candidate = response as { response?: string };
+  return {
+    requestId,
+    model: routing.resolvedModel,
+    outputText: candidate.response ?? JSON.stringify(response)
+  };
+}
+
 function estimatePromptTokens(messages: Array<{ content: string }>): number {
   const totalChars = messages.reduce((sum, message) => sum + message.content.length, 0);
   return Math.max(Math.ceil(totalChars / 4), 1);
+}
+
+function estimateTextTokens(text: string): number {
+  return Math.max(Math.ceil(text.length / 4), 1);
 }
 
 function isAsyncIterable(value: unknown): value is AsyncIterable<AiStreamChunk> {
@@ -317,4 +611,19 @@ function json<T>(value: T, init?: ResponseInit): Response {
       ...init?.headers
     }
   });
+}
+
+function errorResponse(message: string, status: number): Response {
+  return json({ status: "error", message }, { status });
+}
+
+function decodeBase64Url(input: string): string {
+  const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
+  return atob(padded);
+}
+
+function base64UrlToBytes(input: string): Uint8Array {
+  const binary = decodeBase64Url(input);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
 }

@@ -11,6 +11,7 @@
     "dev:gateway": "cd workers/gateway && npm run dev",
     "dev:router": "cd workers/router && npm run dev",
     "dev:observability": "cd workers/observability && npm run dev",
+    "token:dev": "node scripts/generate_dev_jwt.mjs",
     "lint": "echo 'Add lint scripts later'",
     "test": "echo 'Add tests later'"
   },

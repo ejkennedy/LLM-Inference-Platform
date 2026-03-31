@@ -7,15 +7,22 @@ export type UserTier = 'free' | 'standard' | 'pro';
 
 export type TransportMode = 'stream' | 'json';
 
+export type AuthClaims = {
+  sub: string;
+  tier: UserTier;
+  budgetLimitCents: number;
+  tenantId?: string;
+  iat?: number;
+  exp?: number;
+  nbf?: number;
+};
+
 export type GatewayRequest = {
   messages: ChatMessage[];
   model?: string | null;
-  requestId?: string;
-  userId?: string;
+  requestId?: string | null;
   maxTokens?: number;
   stream?: boolean;
-  userTier?: UserTier;
-  budgetRemainingCents?: number;
 };
 
 export type GatewayResponse = {
@@ -38,6 +45,17 @@ export type RateLimitCheckResponse = {
     type: 'minute';
     bucket: number;
   };
+};
+
+export type BudgetState = {
+  budgetLimitCents: number;
+  estimatedSpendCents: number;
+  remainingBudgetCents: number;
+};
+
+export type UsageSummary = BudgetState & {
+  requestCountCurrentMinute: number;
+  currentMinuteBucket: number;
 };
 
 export type RouterRequest = {
@@ -78,4 +96,17 @@ export type ObservabilityEvent = {
   promptTokens: number;
   completionTokens?: number;
   costCents: number;
+};
+
+export type RateLimitCheckRequest = {
+  requestId: string;
+  userId: string;
+  budgetLimitCents: number;
+  estimatedCostCents: number;
+};
+
+export type SpendRequest = {
+  requestId: string;
+  estimatedCostCents: number;
+  actualCostCents?: number;
 };
