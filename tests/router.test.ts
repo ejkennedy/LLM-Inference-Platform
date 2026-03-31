@@ -6,7 +6,7 @@ import {
   defaultCatalogue,
   estimateCost,
   resolveRoute
-} from "../workers/router/src/index";
+} from "../workers/router/src/policy";
 
 describe("router policy", () => {
   const baseRequest: RouterRequest = {

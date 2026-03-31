@@ -2,13 +2,11 @@ import { createHmac } from "node:crypto";
 
 import { describe, expect, it } from "vitest";
 
-import type { Env } from "../workers/gateway/src/index";
-
 import {
-  authenticate,
+  authenticateRequest,
   estimatePromptTokens,
   estimateTextTokens
-} from "../workers/gateway/src/index";
+} from "../workers/gateway/src/auth";
 
 function createJwt(
   secret: string,
@@ -32,9 +30,6 @@ function createJwt(
 describe("gateway auth helpers", () => {
   const now = Math.floor(Date.now() / 1000);
   const secret = "test-secret";
-  const env = {
-    JWT_SECRET: secret
-  } as Env;
 
   it("authenticates a valid HS256 bearer token", async () => {
     const token = createJwt(secret, {
@@ -49,7 +44,7 @@ describe("gateway auth helpers", () => {
       }
     });
 
-    const claims = await authenticate(request, env);
+    const claims = await authenticateRequest(request, secret);
 
     expect(claims.sub).toBe("demo-user");
     expect(claims.tier).toBe("standard");
@@ -59,8 +54,8 @@ describe("gateway auth helpers", () => {
   it("rejects requests without a bearer token", async () => {
     const request = new Request("https://example.com/v1/chat");
 
-    await expect(authenticate(request, env)).rejects.toBeInstanceOf(Response);
-    await expect(authenticate(request, env)).rejects.toMatchObject({ status: 401 });
+    await expect(authenticateRequest(request, secret)).rejects.toBeInstanceOf(Response);
+    await expect(authenticateRequest(request, secret)).rejects.toMatchObject({ status: 401 });
   });
 
   it("rejects expired tokens", async () => {
@@ -76,7 +71,7 @@ describe("gateway auth helpers", () => {
       }
     });
 
-    await expect(authenticate(request, env)).rejects.toMatchObject({ status: 401 });
+    await expect(authenticateRequest(request, secret)).rejects.toMatchObject({ status: 401 });
   });
 
   it("estimates prompt and completion tokens with a simple char heuristic", () => {
