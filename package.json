@@ -1,0 +1,22 @@
+{
+  "name": "llm-inference-platform",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "workers/*",
+    "shared/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev:gateway": "cd workers/gateway && npm run dev",
+    "dev:router": "cd workers/router && npm run dev",
+    "dev:observability": "cd workers/observability && npm run dev",
+    "lint": "echo 'Add lint scripts later'",
+    "test": "echo 'Add tests later'"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.2026.0",
+    "typescript": "^5.6.0",
+    "wrangler": "^3.0.0"
+  }
+}

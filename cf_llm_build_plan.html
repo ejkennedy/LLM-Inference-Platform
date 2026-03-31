@@ -1,0 +1,648 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+.wrap { font-family: var(--font-sans); padding: 1rem 0 2rem; }
+.phase-nav { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px; }
+.pnav { padding: 5px 14px; border-radius: 999px; font-size: 12px; font-weight: 500; border: 0.5px solid var(--color-border-secondary); background: var(--color-background-secondary); color: var(--color-text-secondary); cursor: pointer; transition: all 0.15s; }
+.pnav:hover { background: var(--color-background-primary); color: var(--color-text-primary); }
+.pnav.active { background: var(--color-text-primary); color: var(--color-background-primary); border-color: var(--color-text-primary); }
+.phase { display: none; animation: fi 0.2s ease; }
+.phase.show { display: block; }
+@keyframes fi { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+
+.phase-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 16px; }
+.pnum { font-size: 44px; font-weight: 500; line-height: 1; min-width: 52px; }
+.phase-title { font-size: 18px; font-weight: 500; line-height: 1.3; margin-bottom: 4px; }
+.phase-goal { font-size: 13px; color: var(--color-text-secondary); line-height: 1.55; }
+.badge { display: inline-block; font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+
+.steps { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.step {
+  background: var(--color-background-secondary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-lg);
+  padding: 13px 15px;
+  cursor: pointer;
+  transition: background 0.13s;
+}
+.step:hover { background: var(--color-background-primary); }
+.step.open { background: var(--color-background-primary); border-color: var(--color-border-secondary); }
+.step-head { display: flex; align-items: center; gap: 10px; }
+.step-num { font-size: 11px; font-family: var(--font-mono); font-weight: 500; min-width: 22px; color: var(--color-text-tertiary); }
+.step-name { font-size: 13px; font-weight: 500; flex: 1; }
+.step-time { font-size: 11px; font-family: var(--font-mono); color: var(--color-text-tertiary); white-space: nowrap; }
+.chevron { font-size: 10px; color: var(--color-text-tertiary); transition: transform 0.15s; }
+.step.open .chevron { transform: rotate(90deg); }
+
+.step-body { display: none; padding-top: 12px; border-top: 0.5px solid var(--color-border-tertiary); margin-top: 10px; }
+.step.open .step-body { display: block; }
+
+.task-list { list-style: none; display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.task-list li { font-size: 12.5px; color: var(--color-text-secondary); padding-left: 14px; position: relative; line-height: 1.5; }
+.task-list li::before { content: '→'; position: absolute; left: 0; font-size: 10px; top: 2px; color: var(--color-text-tertiary); }
+
+.code-block { font-family: var(--font-mono); font-size: 11.5px; background: var(--color-background-tertiary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 10px 12px; color: var(--color-text-secondary); line-height: 1.6; white-space: pre; overflow-x: auto; margin-top: 8px; }
+
+.kv-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin-top: 8px; }
+.kv-key { font-size: 11px; font-family: var(--font-mono); color: var(--color-text-tertiary); padding-top: 2px; white-space: nowrap; }
+.kv-val { font-size: 12px; color: var(--color-text-secondary); line-height: 1.5; }
+
+.chip-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.chip { font-size: 11px; font-family: var(--font-mono); padding: 3px 8px; border-radius: 4px; border: 0.5px solid var(--color-border-secondary); background: var(--color-background-primary); color: var(--color-text-primary); white-space: nowrap; }
+.chip.hi { border-color: transparent; }
+
+.warn-box { margin-top: 10px; padding: 9px 12px; border-radius: var(--border-radius-md); font-size: 12px; line-height: 1.5; border: 0.5px solid var(--color-border-warning); background: var(--color-background-warning); color: var(--color-text-warning); }
+.tip-box { margin-top: 10px; padding: 9px 12px; border-radius: var(--border-radius-md); font-size: 12px; line-height: 1.5; border: 0.5px solid var(--color-border-info); background: var(--color-background-info); color: var(--color-text-info); }
+
+@media (max-width: 500px) { .pnum { font-size: 32px; min-width: 40px; } }
+</style>
+
+<div class="wrap">
+<div class="phase-nav" id="pnav"></div>
+<div id="phases"></div>
+</div>
+
+<script>
+const phases = [
+  {
+    num: '01',
+    title: 'Foundations & first inference',
+    badge: 'Week 1–2',
+    badgeBg: '#EEEDFE', badgeTc: '#3C3489',
+    numColor: '#AFA9EC',
+    goal: 'Ship a thin vertical slice first: one authenticated request path, one supported chat model, one streaming response contract, and one deploy target you can verify end to end.',
+    steps: [
+      {
+        name: 'Decision record + acceptance criteria',
+        time: '2h',
+        tasks: [
+          'Freeze the MVP contract before adding features: /v1/chat, SSE-only streaming, one primary model, one staging environment',
+          'Define request/response schemas in shared/types and version them early so gateway and router cannot drift',
+          'Add explicit acceptance gates for Phase 1: remote dev inference works, request IDs propagate, health endpoint passes, one smoke test runs in CI',
+          'Write down what is intentionally out of scope for the MVP: multi-provider fallback, semantic cache tuning, billing UI, Terraform-managed secrets',
+        ],
+        code: null,
+        note: null,
+        warn: null,
+        tip: 'Most edge-platform rewrites happen because the first slice is too wide. Lock the contract and prove one happy path before adding policy layers.'
+      },
+      {
+        name: 'Repo + Wrangler setup',
+        time: '2h',
+        tasks: [
+          'Keep the current monorepo layout: workers/gateway, workers/router, workers/observability, shared/types',
+          'Standardise wrangler.toml per worker with explicit dev/staging/production environments and consistent bindings',
+          'Shared types package for request/response schemas (TypeScript)',
+          'GitHub Actions CI should start with install, build, type-check, and smoke tests; deploy only after those are reliable',
+        ],
+        code: `npm create cloudflare@latest -- --type worker gateway
+npm create cloudflare@latest -- --type worker router
+# wrangler.toml
+name = "llm-gateway"
+compatibility_date = "2024-09-23"
+[ai]
+binding = "AI"`,
+        note: null,
+        warn: null,
+        tip: 'Use Workers for Platforms if you plan multi-tenant eventually — set the account structure correctly now, it is painful to migrate later.'
+      },
+      {
+        name: 'First Workers AI inference call',
+        time: '1h',
+        tasks: [
+          'Bind Workers AI in wrangler.toml: [ai] binding = "AI"',
+          'Call env.AI.run("@cf/meta/llama-3.1-8b-instruct", { messages, stream: true }) in the handler',
+          'Generate or accept a request_id and return it in headers before introducing router/auth complexity',
+          'Return a minimal SSE contract the client can rely on, including terminal [DONE] semantics and error framing',
+          'Test with wrangler dev --remote and a curl smoke test because AI bindings are not available in local mode',
+        ],
+        code: `export default {
+  async fetch(req, env) {
+    const { messages } = await req.json();
+    const stream = await env.AI.run(
+      "@cf/meta/llama-3.1-8b-instruct",
+      { messages, stream: true }
+    );
+    return new Response(stream, {
+      headers: { "Content-Type": "text/event-stream" }
+    });
+  }
+}`,
+        note: null,
+        warn: 'Workers AI free tier has hard neuron limits. Set up billing and check limits before load testing — you will hit them instantly.',
+        tip: null
+      },
+      {
+        name: 'Model catalogue in KV',
+        time: '3h',
+        tasks: [
+          'Create KV namespace: MODEL_CATALOGUE',
+          'Store model configs as JSON: { id, provider, cf_model_id, input_cost_per_mtok, output_cost_per_mtok, max_ctx, enabled, fallback_to }',
+          'Treat the catalogue as policy config, not billing truth. Estimated route cost comes from this table; actual spend must be reconciled from usage returned by the provider',
+          'Write a fetch-with-cache helper: KV.get() → parse → cache in memory for 60s with schema validation and a safe default model',
+          'Start with the smallest set you will actually support in the MVP; add embeddings and secondary families only when a feature depends on them',
+        ],
+        code: `// KV structure
+{
+  "llama-3-8b": {
+    "cf_id": "@cf/meta/llama-3.1-8b-instruct",
+    "cost_per_mtok": 0.05,
+    "max_ctx": 128000,
+    "fallback_to": "llama-3-70b",
+    "tier": "fast"
+  }
+}`,
+        note: null,
+        warn: null,
+        tip: null
+      },
+      {
+        name: 'Cloudflare AI Gateway integration',
+        time: '2h',
+        tasks: [
+          'Add AI Gateway after the direct Workers AI path works so you can compare behaviour and latency with and without the extra hop',
+          'Put all provider calls behind one adapter so the gateway worker does not care whether inference is via Workers AI direct binding or AI Gateway HTTP',
+          'Enable logging first, then introduce caching behind a feature flag because cacheability depends on prompt class and tenant isolation',
+          'Record which requests are safe to cache and which must bypass because they contain user-specific or highly dynamic context',
+        ],
+        code: `// Route via AI Gateway instead of direct binding
+const response = await fetch(
+  \`https://gateway.ai.cloudflare.com/v1/\${ACCOUNT_ID}/\${GATEWAY_ID}/workers-ai/@cf/meta/llama-3.1-8b-instruct\`,
+  {
+    method: "POST",
+    headers: { "cf-aig-authorization": \`Bearer \${env.AI_GATEWAY_TOKEN}\` },
+    body: JSON.stringify({ messages, stream: true })
+  }
+);`,
+        note: null,
+        warn: null,
+        tip: 'AI Gateway is the most underused Cloudflare feature. Semantic caching alone can cut your Workers AI spend by 30–60% on typical chat workloads.'
+      },
+    ]
+  },
+  {
+    num: '02',
+    title: 'Authentication & rate limiting',
+    badge: 'Week 2–3',
+    badgeBg: '#E1F5EE', badgeTc: '#085041',
+    numColor: '#5DCAA5',
+    goal: 'Every request must be authenticated and counted against a per-user rate limit before it touches inference. Durable Objects are the right primitive — one actor per user, strongly consistent.',
+    steps: [
+      {
+        name: 'JWT auth middleware',
+        time: '3h',
+        tasks: [
+          'Verify JWT on every request in the gateway worker before forwarding',
+          'Use Web Crypto API in Workers and validate iss, aud, exp, nbf, and kid explicitly',
+          'Prefer JWKS or a versioned public-key set for externally issued tokens; only use KV as the source of truth if you control token issuance',
+          'Extract user_id, tier, budget_limit_cents, and tenant_id from claims and pass them as internal request metadata',
+        ],
+        code: `async function verifyJWT(token, env) {
+  const [header64, payload64, sig64] = token.split(".");
+  const key = await getPublicKey(env); // from KV
+  const valid = await crypto.subtle.verify(
+    "RSASSA-PKCS1-v1_5", key,
+    b64decode(sig64),
+    new TextEncoder().encode(\`\${header64}.\${payload64}\`)
+  );
+  if (!valid) throw new Error("invalid signature");
+  return JSON.parse(atob(payload64));
+}`,
+        note: null,
+        warn: null,
+        tip: null
+      },
+      {
+        name: 'Rate limiter with Durable Objects',
+        time: '4h',
+        tasks: [
+          'Create a RateLimiter Durable Object — one instance per user_id',
+          'DO stores windowed counters such as { minute_bucket, requests_in_bucket, day_bucket, tokens_today, estimated_spend_cents }',
+          'Gateway calls DO.fetch("/check") before every inference — DO returns allow/deny, remaining, and the active policy window',
+          'Use bucketed counters keyed by time window; do not rely on resetting a single counter 60s after the most recent request because that produces drifting windows',
+          'Return 429 with Retry-After header when limit exceeded and log the specific policy that denied the request',
+        ],
+        code: `export class RateLimiter {
+  constructor(state) { this.state = state; }
+  async fetch(req) {
+    const { url } = req;
+    if (url.endsWith("/check")) {
+      const bucket = Math.floor(Date.now() / 60_000);
+      const key = \`rpm:\${bucket}\`;
+      const count = (await this.state.storage.get(key)) ?? 0;
+      if (count >= 60) return Response.json({ allow: false });
+      await this.state.storage.put(key, count + 1);
+      return Response.json({
+        allow: true,
+        remaining: 60 - count - 1,
+        window: { type: "minute", bucket }
+      });
+    }
+  }
+}`,
+        note: null,
+        warn: 'Durable Objects are billed per request and per GB-month of storage. Each rate-limit check is a DO request. At scale this adds up — batch the check + decrement into one call.',
+        tip: null
+      },
+      {
+        name: 'Budget enforcement',
+        time: '2h',
+        tasks: [
+          'Add estimated_spend_cents, actual_spend_cents, and budget_limit_cents to Durable Object state',
+          'Before execution, reserve against estimated route cost; after execution, reconcile with actual usage from the provider response and release any over-reserved amount',
+          'Cost should separate input and output token pricing because many models bill them differently',
+          'DO returns over_budget: true when limit exceeded — gateway returns 402 with machine-readable spend details',
+          'Expose DO.fetch("/balance") endpoint for a billing API',
+        ],
+        code: null,
+        warn: null,
+        tip: 'Store budget in integer cents, not floats. Floating point rounding errors in billing code will cause you pain.'
+      }
+    ]
+  },
+  {
+    num: '03',
+    title: 'Model router & cost-aware fallback',
+    badge: 'Week 3–4',
+    badgeBg: '#FAECE7', badgeTc: '#712B13',
+    numColor: '#F0997B',
+    goal: 'Build the router that decides which model to send a request to. The logic: pick the best model the user\'s budget can afford, with automatic fallback if Workers AI is degraded.',
+    steps: [
+      {
+        name: 'Router worker skeleton',
+        time: '2h',
+        tasks: [
+          'Router is a separate worker only for policy isolation; keep the interface narrow so you can inline it later if the extra hop is not worth it',
+          'Gateway calls it via service binding with request_id and policy context',
+          'Input: { user_tier, budget_remaining_cents, requested_model, prompt_tokens_est, provider_allowlist }',
+          'Output: { resolved_model, cf_model_id, expected_cost_cents, via: "workers-ai" | "external" }',
+          'Wire service binding in wrangler.toml: [[services]] binding = "ROUTER" service = "llm-router"',
+        ],
+        code: `// In wrangler.toml (gateway)
+[[services]]
+binding = "ROUTER"
+service = "llm-router"
+
+// In gateway worker
+const routing = await env.ROUTER.fetch(
+  new Request("internal://route", {
+    method: "POST",
+    body: JSON.stringify({ user_tier, budget_remaining_cents, model })
+  })
+).then(r => r.json());`,
+        note: null,
+        warn: null,
+        tip: null
+      },
+      {
+        name: 'Routing rules & fallback chain',
+        time: '3h',
+        tasks: [
+          'Rule 1: if requested model is available on Workers AI and cost fits budget → use it',
+          'Rule 2: if requested model is too expensive → downgrade to next cheapest in same family',
+          'Rule 3: external fallback is feature-flagged and opt-in per tenant; do not silently cross providers without an explicit policy decision',
+          'Rule 4: if user is on free tier → cap to llama-3-8b only, no external fallback',
+          'Log every routing decision with reason code, fallback depth, and policy version for analysis',
+        ],
+        code: `function resolveModel(req, catalogue) {
+  const model = catalogue[req.requested_model];
+  const cost = estimateCost(req.prompt_tokens_est, model);
+  if (cost > req.budget_remaining_cents)
+    return resolveModel({ ...req, requested_model: model.fallback_to }, catalogue);
+  if (req.user_tier === "free" && model.tier !== "fast")
+    return resolveModel({ ...req, requested_model: "llama-3-8b" }, catalogue);
+  return { resolved_model: req.requested_model, ...model, expected_cost_cents: cost };
+}`,
+        note: null,
+        warn: null,
+        tip: 'Cap fallback chain depth at 3. Infinite recursion on a broken model catalogue will crash the worker. Add a depth counter.'
+      },
+      {
+        name: 'External API fallback path',
+        time: '3h',
+        tasks: [
+          'Store external API keys in Workers Secrets (wrangler secret put OPENAI_KEY)',
+          'Never in KV, never in wrangler.toml — secrets only',
+          'Build provider adapters that normalise both sync and streaming responses to the internal schema',
+          'Retry only for clearly transient upstream failures and pair retries with a circuit-breaker flag so one degraded provider does not amplify spend',
+          'Tag all external API calls with via: "external" in logs for cost attribution',
+        ],
+        code: null,
+        warn: 'Bound upstream duration aggressively. Even when CPU is not the bottleneck, one slow fallback path will destroy tail latency and tie up concurrency.',
+        tip: null
+      }
+    ]
+  },
+  {
+    num: '04',
+    title: 'Streaming, SSE & prompt caching',
+    badge: 'Week 4–5',
+    badgeBg: '#E6F1FB', badgeTc: '#0C447C',
+    numColor: '#85B7EB',
+    goal: 'Serve streaming responses correctly — SSE from Worker to client with backpressure handling. Add semantic prompt caching via AI Gateway to cut cost and latency on repeated queries.',
+    steps: [
+      {
+        name: 'SSE streaming pipeline',
+        time: '4h',
+        tasks: [
+          'Workers AI returns a ReadableStream of SSE chunks when stream: true',
+          'Transform each chunk: parse the provider delta, re-emit as properly formatted SSE, and preserve provider finish reasons for debugging',
+          'Forward X-Request-Id header so clients can correlate logs',
+          'Handle stream cancellation: if client disconnects, abort the upstream fetch to avoid wasted tokens',
+          'Test with curl --no-buffer to verify chunk delivery before building a UI',
+        ],
+        code: `const { readable, writable } = new TransformStream();
+const writer = writable.getWriter();
+const encoder = new TextEncoder();
+
+// Pipe AI stream through formatter
+(async () => {
+  for await (const chunk of aiStream) {
+    const text = chunk.response ?? "";
+    await writer.write(
+      encoder.encode(\`data: \${JSON.stringify({ delta: text })}\n\n\`)
+    );
+  }
+  await writer.write(encoder.encode("data: [DONE]\n\n"));
+  await writer.close();
+})();
+
+return new Response(readable, {
+  headers: {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    "X-Request-Id": requestId
+  }
+});`,
+        note: null,
+        warn: null,
+        tip: null
+      },
+      {
+        name: 'Semantic caching via AI Gateway',
+        time: '2h',
+        tasks: [
+          'Use semantic caching only for prompt classes that are deterministic enough to tolerate approximate matches',
+          'Set cache TTL and similarity thresholds per route, not just per model tier',
+          'Add an explicit bypass header for requests that require freshness or contain user-specific context',
+          'Log cache hit/miss rate — target >25% hit rate for typical chat workloads',
+          'Expose cache headers to client (cf-aig-cache-status) for debugging',
+        ],
+        code: null,
+        warn: null,
+        tip: 'Semantic caching has a small false-positive risk — two different questions can get the same cached answer if they are semantically close. Add a similarity threshold config (0.9+ is safe for most use cases).'
+      },
+      {
+        name: 'Prompt registry in KV or R2',
+        time: '2h',
+        tasks: [
+          'Treat prompts as versioned assets, not as an inference cache. Store reusable system prompts by id/version in KV or R2 and reference them from request metadata',
+          'Resolve prompt templates centrally before inference so prompt changes are auditable and reversible',
+          'Store: { prompt_id, version, prompt_text, checksum, last_updated_by } and keep a rollback path for bad prompt releases',
+          'This is separate from semantic caching — the goal here is governance and consistency, not trying to influence provider-side tokenisation',
+        ],
+        code: null,
+        warn: null,
+        tip: null
+      }
+    ]
+  },
+  {
+    num: '05',
+    title: 'Observability & cost metering',
+    badge: 'Week 5–6',
+    badgeBg: '#FBEAF0', badgeTc: '#72243E',
+    numColor: '#ED93B1',
+    goal: 'Every request leaves a structured trace. You can answer: how much did that user spend today, what was the p95 TTFT for Llama-3-70b, which prompt patterns are burning the most tokens.',
+    steps: [
+      {
+        name: 'Structured logging schema',
+        time: '2h',
+        tasks: [
+          'Define a log event schema — emit as JSON to console.log() (Logpush picks this up automatically)',
+          'Required fields: request_id, tenant_id, user_id_hash, model_resolved, prompt_tokens, completion_tokens, ttft_ms, total_ms, estimated_cost_cents, actual_cost_cents, cache_hit, routing_reason, via',
+          'Use context propagation: set requestId at gateway entry, thread through all workers via headers',
+          'Redact or hash any prompt content and identifiers before emission; raw prompts should never land in logs by default',
+          'Logpush route to R2 bucket or external SIEM — configure in Cloudflare dashboard',
+        ],
+        code: `console.log(JSON.stringify({
+  ts: Date.now(),
+  request_id: requestId,
+  tenant_id: claims.tenant_id,
+  user_id_hash: await sha256(claims.sub),
+  model: routing.resolved_model,
+  prompt_tokens: usage.prompt_tokens,
+  completion_tokens: usage.completion_tokens,
+  ttft_ms: ttft,
+  total_ms: Date.now() - startTs,
+  estimated_cost_cents: routing.expected_cost_cents,
+  actual_cost_cents: actualCostCents,
+  cache_hit: cacheStatus === "HIT",
+  via: routing.via,
+  routing_reason: routing.reason
+}));`,
+        note: null,
+        warn: null,
+        tip: null
+      },
+      {
+        name: 'Metrics export to Grafana Cloud',
+        time: '3h',
+        tasks: [
+          'Workers do not have a persistent metrics store — use Cloudflare Analytics Engine as the primary in-platform metrics sink',
+          'Write metrics to Analytics Engine binding on each request: env.ANALYTICS.writeDataPoint()',
+          'Create a scheduled export job only if Grafana Cloud is required; otherwise keep dashboards on top of Cloudflare-native telemetry until you have enough traffic to justify another moving part',
+          'Key metrics: request_rate, error_rate, p50/p95 ttft per model, cost_per_hour, cache_hit_rate, budget_utilisation',
+        ],
+        code: `// In wrangler.toml
+[[analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "llm_requests"
+
+// In worker
+env.ANALYTICS.writeDataPoint({
+  blobs: [userId, resolvedModel, routingReason],
+  doubles: [promptTokens, completionTokens, ttftMs, costCents],
+  indexes: [requestId]
+});`,
+        note: null,
+        warn: null,
+        tip: 'Cloudflare Analytics Engine is purpose-built for this pattern. Do not use KV for metrics aggregation — it will be slow, inconsistent under contention, and expensive.'
+      },
+      {
+        name: 'Cost dashboard & alerts',
+        time: '3h',
+        tasks: [
+          'Build Grafana dashboard: cost by model (stacked bar), daily spend trend, p95 TTFT per model, cache hit rate, error rate by routing reason',
+          'Alert on: daily cost > $X (budget guard), error_rate > 1% for 5m, TTFT p95 > 5s for 10m',
+          'Add a /admin/cost-summary endpoint (worker, admin-only JWT) that queries your chosen source of truth with explicit freshness semantics',
+          'Expose per-user spend via /v1/usage endpoint, but document that near-real-time usage may be eventually consistent',
+        ],
+        code: null,
+        warn: null,
+        tip: null
+      }
+    ]
+  },
+  {
+    num: '06',
+    title: 'CI/CD, IaC & production hardening',
+    badge: 'Week 6–8',
+    badgeBg: '#EAF3DE', badgeTc: '#27500A',
+    numColor: '#97C459',
+    goal: 'Everything reproducible from code. No click-ops. Config managed in Terraform, deployments triggered by git, secrets rotated without downtime.',
+    steps: [
+      {
+        name: 'Terraform for Cloudflare resources',
+        time: '4h',
+        tasks: [
+          'Use cloudflare/terraform-provider-cloudflare to manage: Workers, KV namespaces, Durable Object namespaces, AI Gateway, Logpush jobs, Analytics Engine datasets',
+          'State in Terraform Cloud or S3 — never local',
+          'Separate modules: workers/, storage/, observability/, ai_gateway/',
+          'Manage non-secret infrastructure in Terraform; inject runtime secrets through CI or wrangler secret workflows so secret values do not become a Terraform-state problem',
+        ],
+        code: `resource "cloudflare_workers_kv_namespace" "model_catalogue" {
+  account_id = var.account_id
+  title      = "model-catalogue-\${var.env}"
+}
+resource "cloudflare_worker_script" "gateway" {
+  account_id = var.account_id
+  name       = "llm-gateway-\${var.env}"
+  content    = file("workers/gateway/dist/index.js")
+  kv_namespace_binding {
+    name         = "MODEL_CATALOGUE"
+    namespace_id = cloudflare_workers_kv_namespace.model_catalogue.id
+  }
+}`,
+        note: null,
+        warn: 'Durable Object namespaces cannot be renamed or deleted without data loss. Name them carefully from the start: RateLimiter-prod, not RateLimiter.',
+        tip: null
+      },
+      {
+        name: 'GitHub Actions deployment pipeline',
+        time: '3h',
+        tasks: [
+          'On PR: install, build, type-check, and run smoke tests; add preview deploys only once the core path is stable',
+          'On merge to main: deploy to staging environment automatically',
+          'On release tag: deploy to production with manual approval gate (GitHub Environments)',
+          'Deployment verification step: smoke test the /health endpoint after each deploy',
+          'Store CLOUDFLARE_API_TOKEN as GitHub secret — scoped to deploy only, not account-level',
+        ],
+        code: `# .github/workflows/deploy.yml
+- name: Deploy gateway worker
+  run: wrangler deploy
+  env:
+    CLOUDFLARE_API_TOKEN: \${{ secrets.CF_API_TOKEN }}
+    CLOUDFLARE_ACCOUNT_ID: \${{ vars.CF_ACCOUNT_ID }}
+- name: Smoke test
+  run: |
+    curl -f https://api-staging.example.com/health || exit 1`,
+        note: null,
+        warn: null,
+        tip: 'Use wrangler versions to manage gradual rollouts — deploy a new version, route 10% of traffic, promote if metrics hold. This is Cloudflare\'s equivalent of canary deployments.'
+      },
+      {
+        name: 'Secret rotation & zero-downtime key updates',
+        time: '2h',
+        tasks: [
+          'JWT verification keys: store by key_id in KV, JWT header carries key_id — rotate by adding new key without removing old one, then remove old key after TTL expires',
+          'External API keys (OpenAI, Anthropic): store in Workers Secrets and rotate with staged deployment/version promotion so you can verify the new key before removing the old one',
+          'AI Gateway token: rotate on a schedule and validate with a post-rotation smoke test before promoting globally',
+        ],
+        code: null,
+        warn: null,
+        tip: null
+      },
+      {
+        name: 'Load testing & latency benchmarks',
+        time: '3h',
+        tasks: [
+          'Use k6 or Grafana k6 Cloud — run from multiple regions to test edge routing',
+          'Benchmark scenarios: cold start latency, p95 TTFT at 50/100/200 concurrent users, routing overhead (gateway → router round trip), cache hit rate under realistic traffic',
+          'Document results in docs/benchmark-results.md — commit real numbers, not projections',
+          'Run tests against staging with hard spend caps, kill switches, and a low-risk model set before you point any load at production',
+          'Key targets: gateway overhead < 5ms, TTFT p95 < 3s for 8B model, cache hit rate > 20%',
+        ],
+        code: `// k6 script skeleton
+import http from "k6/http";
+export const options = {
+  scenarios: {
+    ramp: {
+      executor: "ramping-vus",
+      stages: [
+        { duration: "30s", target: 50 },
+        { duration: "2m",  target: 100 },
+        { duration: "30s", target: 0 },
+      ]
+    }
+  }
+};
+export default function() {
+  const r = http.post("https://api.example.com/v1/chat", payload, params);
+  check(r, { "status 200": r => r.status === 200 });
+}`,
+        note: null,
+        warn: null,
+        tip: null
+      }
+    ]
+  }
+];
+
+const navEl = document.getElementById('pnav');
+const phasesEl = document.getElementById('phases');
+
+phases.forEach((p, pi) => {
+  const btn = document.createElement('button');
+  btn.className = 'pnav' + (pi === 0 ? ' active' : '');
+  btn.textContent = p.num + ' — ' + p.badge;
+  btn.onclick = () => {
+    document.querySelectorAll('.pnav').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.phase').forEach(ph => ph.classList.remove('show'));
+    btn.classList.add('active');
+    document.getElementById('phase-' + pi).classList.add('show');
+  };
+  navEl.appendChild(btn);
+
+  const phDiv = document.createElement('div');
+  phDiv.className = 'phase' + (pi === 0 ? ' show' : '');
+  phDiv.id = 'phase-' + pi;
+
+  const stepsHtml = p.steps.map((s, si) => {
+    const codeHtml = s.code ? `<div class="code-block">${s.code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>` : '';
+    const warnHtml = s.warn ? `<div class="warn-box">${s.warn}</div>` : '';
+    const tipHtml = s.tip ? `<div class="tip-box">${s.tip}</div>` : '';
+    return `
+      <div class="step" id="step-${pi}-${si}">
+        <div class="step-head">
+          <span class="step-num">${String(si+1).padStart(2,'0')}</span>
+          <span class="step-name">${s.name}</span>
+          <span class="step-time">${s.time}</span>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="step-body">
+          <ul class="task-list">${s.tasks.map(t => `<li>${t}</li>`).join('')}</ul>
+          ${codeHtml}${warnHtml}${tipHtml}
+        </div>
+      </div>`;
+  }).join('');
+
+  phDiv.innerHTML = `
+    <div class="phase-head">
+      <div class="pnum" style="color:${p.numColor}">${p.num}</div>
+      <div>
+        <span class="badge" style="background:${p.badgeBg};color:${p.badgeTc}">${p.badge}</span>
+        <div class="phase-title">${p.title}</div>
+        <div class="phase-goal">${p.goal}</div>
+      </div>
+    </div>
+    <div class="steps">${stepsHtml}</div>
+  `;
+  phasesEl.appendChild(phDiv);
+});
+
+document.addEventListener('click', e => {
+  const step = e.target.closest('.step');
+  if (step) step.classList.toggle('open');
+});
+</script>
