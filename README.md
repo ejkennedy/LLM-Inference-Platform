@@ -14,6 +14,7 @@ Cloudflare Workers monorepo for a portfolio-grade LLM gateway. The current slice
 - `GET /health` on each worker returns a lightweight health payload.
 - `POST /v1/chat` accepts chat messages, resolves a model through the router worker, and streams Workers AI output.
 - Request IDs are generated at the edge and returned via `X-Request-Id`.
+- A Durable Object-backed limiter enforces a simple per-user requests-per-minute guard.
 - The router supports free-tier model capping and simple budget-aware fallback.
 
 ## Getting Started
@@ -48,6 +49,7 @@ curl --no-buffer \
       { "role": "user", "content": "Explain edge inference in one sentence." }
     ],
     "model": "llama-3.1-8b",
+    "userId": "demo-user",
     "stream": true
   }'
 ```

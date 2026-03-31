@@ -1,6 +1,7 @@
 import type {
   GatewayRequest,
   HealthResponse,
+  RateLimitCheckResponse,
   RouterRequest,
   RouterResponse
 } from "@llm-inference-platform/types";
@@ -52,6 +53,7 @@ export default {
     const payload = (await request.json()) as GatewayRequest;
     const requestId = payload.requestId ?? request.headers.get("X-Request-Id") ?? crypto.randomUUID();
     const messages = payload.messages ?? [];
+    const userId = payload.userId ?? "anonymous";
 
     if (messages.length === 0) {
       return withCors(
@@ -62,6 +64,26 @@ export default {
             message: "messages must contain at least one chat message"
           },
           { status: 400 }
+        ),
+        requestId
+      );
+    }
+
+    const rateLimit = await checkRateLimit(env, userId);
+    if (!rateLimit.allow) {
+      return withCors(
+        json(
+          {
+            requestId,
+            status: "error",
+            message: "rate limit exceeded"
+          },
+          {
+            status: 429,
+            headers: rateLimit.retryAfterSeconds
+              ? { "Retry-After": String(rateLimit.retryAfterSeconds) }
+              : undefined
+          }
         ),
         requestId
       );
@@ -124,10 +146,12 @@ export class RateLimiter {
     const key = `rpm:${minuteBucket}`;
     const count = ((await this.state.storage.get<number>(key)) ?? 0) + 1;
     await this.state.storage.put(key, count);
+    const allow = count <= 60;
 
-    return json({
-      allow: count <= 60,
+    return json<RateLimitCheckResponse>({
+      allow,
       remaining: Math.max(60 - count, 0),
+      retryAfterSeconds: allow ? undefined : 60 - Math.floor((now % 60_000) / 1_000),
       window: {
         type: "minute",
         bucket: minuteBucket
@@ -152,6 +176,19 @@ async function resolveRoute(env: Env, payload: RouterRequest): Promise<RouterRes
   }
 
   return (await response.json()) as RouterResponse;
+}
+
+async function checkRateLimit(env: Env, userId: string): Promise<RateLimitCheckResponse> {
+  const id = env.RATE_LIMITER.idFromName(userId);
+  const response = await env.RATE_LIMITER.get(id).fetch("https://rate-limiter.internal/check", {
+    method: "POST"
+  });
+
+  if (!response.ok) {
+    throw new Error(`Rate limiter failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as RateLimitCheckResponse;
 }
 
 async function normalizeAiStream(

@@ -11,6 +11,7 @@ export type GatewayRequest = {
   messages: ChatMessage[];
   model?: string | null;
   requestId?: string;
+  userId?: string;
   maxTokens?: number;
   stream?: boolean;
   userTier?: UserTier;
@@ -27,6 +28,16 @@ export type HealthResponse = {
   status: 'ok';
   service: 'gateway' | 'router' | 'observability';
   ts: string;
+};
+
+export type RateLimitCheckResponse = {
+  allow: boolean;
+  remaining: number;
+  retryAfterSeconds?: number;
+  window: {
+    type: 'minute';
+    bucket: number;
+  };
 };
 
 export type RouterRequest = {
