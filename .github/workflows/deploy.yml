@@ -41,17 +41,11 @@ jobs:
       - name: Build workspaces
         run: npm run build
 
-  deploy-staging:
+  deploy-staging-router:
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'staging')
     needs: verify
     runs-on: ubuntu-latest
     environment: staging
-    strategy:
-      matrix:
-        worker:
-          - router
-          - observability
-          - gateway
 
     steps:
       - name: Checkout
@@ -66,15 +60,65 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Deploy worker to staging
-        run: npx wrangler deploy --config workers/${{ matrix.worker }}/wrangler.toml --env staging
+      - name: Deploy router to staging
+        run: npx wrangler deploy --config workers/router/wrangler.toml --env staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+  deploy-staging-observability:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'staging')
+    needs: deploy-staging-router
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy observability to staging
+        run: npx wrangler deploy --config workers/observability/wrangler.toml --env staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+  deploy-staging-gateway:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'staging')
+    needs: deploy-staging-observability
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy gateway to staging
+        run: npx wrangler deploy --config workers/gateway/wrangler.toml --env staging
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
   smoke-staging:
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'staging')
-    needs: deploy-staging
+    needs: deploy-staging-gateway
     runs-on: ubuntu-latest
     environment: staging
 
@@ -82,17 +126,11 @@ jobs:
       - name: Smoke check gateway health
         run: curl --fail --silent --show-error "${{ vars.STAGING_GATEWAY_URL }}/health"
 
-  deploy-production:
+  deploy-production-router:
     if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'production')
     needs: verify
     runs-on: ubuntu-latest
     environment: production
-    strategy:
-      matrix:
-        worker:
-          - router
-          - observability
-          - gateway
 
     steps:
       - name: Checkout
@@ -107,15 +145,65 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Deploy worker to production
-        run: npx wrangler deploy --config workers/${{ matrix.worker }}/wrangler.toml --env production
+      - name: Deploy router to production
+        run: npx wrangler deploy --config workers/router/wrangler.toml --env production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+  deploy-production-observability:
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'production')
+    needs: deploy-production-router
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy observability to production
+        run: npx wrangler deploy --config workers/observability/wrangler.toml --env production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+  deploy-production-gateway:
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'production')
+    needs: deploy-production-observability
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy gateway to production
+        run: npx wrangler deploy --config workers/gateway/wrangler.toml --env production
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
   smoke-production:
     if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'production')
-    needs: deploy-production
+    needs: deploy-production-gateway
     runs-on: ubuntu-latest
     environment: production
 

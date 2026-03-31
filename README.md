@@ -135,8 +135,8 @@ The repo includes [ci.yml](/Users/ethan/Dev/LLM-Inference-Platform/.github/workf
 
 The repo includes [deploy.yml](/Users/ethan/Dev/LLM-Inference-Platform/.github/workflows/deploy.yml) with this flow:
 
-- Push to `main`: verify, then deploy all workers to `staging`
-- Release publish or manual dispatch: verify, then deploy all workers to `production`
+- Push to `main`: verify, then deploy `router` -> `observability` -> `gateway` to `staging`
+- Release publish or manual dispatch: verify, then deploy `router` -> `observability` -> `gateway` to `production`
 
 GitHub configuration expected by the workflow:
 
