@@ -1,6 +1,7 @@
 import type {
   GatewayRequest,
   HealthResponse,
+  ObservabilityEvent,
   RateLimitCheckResponse,
   RouterRequest,
   RouterResponse
@@ -10,6 +11,7 @@ export interface Env {
   AI: Ai;
   MODEL_CATALOGUE: KVNamespace;
   ROUTER: Fetcher;
+  OBSERVABILITY: Fetcher;
   RATE_LIMITER: DurableObjectNamespace;
 }
 
@@ -28,7 +30,7 @@ const corsHeaders = {
 };
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
     if (request.method === "OPTIONS") {
@@ -54,6 +56,7 @@ export default {
     const requestId = payload.requestId ?? request.headers.get("X-Request-Id") ?? crypto.randomUUID();
     const messages = payload.messages ?? [];
     const userId = payload.userId ?? "anonymous";
+    const promptTokensEstimate = estimatePromptTokens(messages);
 
     if (messages.length === 0) {
       return withCors(
@@ -94,10 +97,20 @@ export default {
       userTier: payload.userTier ?? "free",
       budgetRemainingCents: payload.budgetRemainingCents ?? 100,
       requestedModel: payload.model,
-      promptTokensEstimate: estimatePromptTokens(messages),
+      promptTokensEstimate,
       maxOutputTokens: payload.maxTokens ?? 512,
       providerAllowlist: ["workers-ai"]
     });
+
+    ctx.waitUntil(
+      publishObservation(env, {
+        requestId,
+        userId,
+        model: routing.resolvedModel,
+        promptTokens: promptTokensEstimate,
+        costCents: routing.expectedCostCents
+      })
+    );
 
     if (routing.via !== "workers-ai") {
       return withCors(
@@ -189,6 +202,20 @@ async function checkRateLimit(env: Env, userId: string): Promise<RateLimitCheckR
   }
 
   return (await response.json()) as RateLimitCheckResponse;
+}
+
+async function publishObservation(env: Env, event: ObservabilityEvent): Promise<void> {
+  const response = await env.OBSERVABILITY.fetch("https://observability.internal/events", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(event)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Observability worker failed with status ${response.status}`);
+  }
 }
 
 async function normalizeAiStream(

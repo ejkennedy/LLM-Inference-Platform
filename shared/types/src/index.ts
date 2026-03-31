@@ -70,3 +70,12 @@ export type ModelCatalogueEntry = {
   tier: 'fast' | 'balanced' | 'premium';
   fallbackTo?: string;
 };
+
+export type ObservabilityEvent = {
+  requestId: string;
+  userId?: string;
+  model: string;
+  promptTokens: number;
+  completionTokens?: number;
+  costCents: number;
+};

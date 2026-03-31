@@ -15,6 +15,7 @@ Cloudflare Workers monorepo for a portfolio-grade LLM gateway. The current slice
 - `POST /v1/chat` accepts chat messages, resolves a model through the router worker, and streams Workers AI output.
 - Request IDs are generated at the edge and returned via `X-Request-Id`.
 - A Durable Object-backed limiter enforces a simple per-user requests-per-minute guard.
+- The gateway emits lightweight request metadata to the observability worker through a Cloudflare service binding.
 - The router supports free-tier model capping and simple budget-aware fallback.
 
 ## Getting Started

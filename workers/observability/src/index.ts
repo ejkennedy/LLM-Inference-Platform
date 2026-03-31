@@ -1,17 +1,8 @@
-import type { HealthResponse } from "@llm-inference-platform/types";
+import type { HealthResponse, ObservabilityEvent } from "@llm-inference-platform/types";
 
 export interface Env {
   ANALYTICS: AnalyticsEngineDataset;
 }
-
-type ObservabilityEvent = {
-  requestId?: string;
-  userId?: string;
-  model?: string;
-  promptTokens?: number;
-  completionTokens?: number;
-  costCents?: number;
-};
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -29,7 +20,7 @@ export default {
       return new Response("Method Not Allowed", { status: 405 });
     }
 
-    const payload = (await request.json()) as ObservabilityEvent;
+    const payload = (await request.json()) as Partial<ObservabilityEvent>;
     console.log(
       JSON.stringify({
         event: "llm_observability",

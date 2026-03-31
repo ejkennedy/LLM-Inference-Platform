@@ -1,0 +1,12 @@
+name = "llm-router"
+main = "dist/index.js"
+compatibility_date = "2025-12-01"
+type = "javascript"
+
+[build]
+command = "npm run build"
+upload = { format = "service-worker", dir = "dist" }
+
+[[kv_namespaces]]
+binding = "MODEL_CATALOGUE"
+namespace_id = ""

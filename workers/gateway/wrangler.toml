@@ -1,0 +1,28 @@
+name = "llm-gateway"
+main = "dist/index.js"
+compatibility_date = "2025-12-01"
+type = "javascript"
+
+[build]
+command = "npm run build"
+upload = { format = "service-worker", dir = "dist" }
+
+[ai]
+binding = "AI"
+
+[[kv_namespaces]]
+binding = "MODEL_CATALOGUE"
+namespace_id = ""
+
+[[durable_objects]]
+name = "RATE_LIMITER"
+class_name = "RateLimiter"
+binding = "RATE_LIMITER"
+
+[[services]]
+binding = "ROUTER"
+service = "llm-router"
+
+[[services]]
+binding = "OBSERVABILITY"
+service = "llm-observability"
