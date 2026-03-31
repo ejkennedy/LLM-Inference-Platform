@@ -1,7 +1,7 @@
 import type { HealthResponse, ObservabilityEvent } from "@llm-inference-platform/types";
 
 export interface Env {
-  ANALYTICS: AnalyticsEngineDataset;
+  ANALYTICS?: AnalyticsEngineDataset;
 }
 
 export default {
@@ -33,7 +33,7 @@ export default {
     );
 
     try {
-      env.ANALYTICS.writeDataPoint({
+      env.ANALYTICS?.writeDataPoint({
         blobs: [payload.model ?? "unknown"],
         doubles: [
           payload.promptTokens ?? 0,

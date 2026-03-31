@@ -6,7 +6,7 @@ import type {
 } from "@llm-inference-platform/types";
 
 export interface Env {
-  MODEL_CATALOGUE: KVNamespace;
+  MODEL_CATALOGUE?: KVNamespace;
 }
 
 const CACHE_TTL_MS = 60_000;
@@ -130,7 +130,9 @@ async function getCatalogue(env: Env): Promise<Record<string, ModelCatalogueEntr
   }
 
   let entries = defaultCatalogue;
-  const raw = await env.MODEL_CATALOGUE.get("models", "json");
+  const raw = env.MODEL_CATALOGUE
+    ? await env.MODEL_CATALOGUE.get("models", "json")
+    : null;
 
   if (isCatalogue(raw)) {
     entries = raw;

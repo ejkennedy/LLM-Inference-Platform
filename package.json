@@ -9,6 +9,7 @@
   "scripts": {
     "build": "npm run build --workspace @llm-inference-platform/types && npm run build --workspace @llm-inference-platform/router && npm run build --workspace @llm-inference-platform/observability && npm run build --workspace @llm-inference-platform/gateway",
     "dev:gateway": "cd workers/gateway && npm run dev",
+    "dev:gateway:remote": "cd workers/gateway && npm run dev:remote",
     "dev:router": "cd workers/router && npm run dev",
     "dev:observability": "cd workers/observability && npm run dev",
     "token:dev": "node scripts/generate_dev_jwt.mjs",
