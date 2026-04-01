@@ -95,7 +95,7 @@ describe("observability telemetry helpers", () => {
   it("renders a cost summary and Prometheus metrics output", () => {
     const summary = toCostSummaryResponse(
       {
-        requests: 10,
+        requests: "10",
         estimated_cost_cents: 1.2,
         actual_cost_cents: 1.1,
         cache_hit_rate: 0.2,
