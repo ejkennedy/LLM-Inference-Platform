@@ -8,3 +8,8 @@ dist/
 **/.dev.vars
 **/dist/
 **/.wrangler
+benchmarks/*.json
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars

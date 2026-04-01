@@ -146,8 +146,13 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 
 ## Phase 6: CI/CD, IaC & Production Hardening
 
+- `[x]` Repo-owned Phase 6 implementation is complete
+- `[-]` Production rollout still requires live environment secrets, Terraform apply/import, and benchmark execution against the real deployment
+
 ### Terraform for Cloudflare resources
-- `[ ]` Terraform is not implemented
+- `[x]` Terraform scaffold is implemented for Cloudflare KV namespaces and environment outputs
+- `[x]` Environment example tfvars are committed
+- `[-]` Terraform still needs to be applied or used to import already-created resources in the target account
 
 ### GitHub Actions deployment pipeline
 - `[x]` CI workflow runs install, test, and build
@@ -159,11 +164,14 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 - `[-]` Real deployment still requires repository/environment secrets and Cloudflare resource setup
 
 ### Secret rotation & zero-downtime key updates
-- `[-]` JWT rotation support exists in gateway config and docs, but broader platform secret rotation automation is not implemented
+- `[x]` JWT rotation support exists in gateway config
+- `[x]` Manual JWT secret rotation workflow is committed
+- `[-]` Rotation still depends on GitHub environment secrets being managed correctly
 
 ### Load testing & latency benchmarks
-- `[ ]` Not implemented
-- `[ ]` No benchmark results are committed
+- `[x]` Benchmark script is implemented
+- `[x]` Manual benchmark workflow is committed
+- `[-]` Real benchmark results still need to be generated and archived from the target environment
 
 ## Production Readiness Summary
 
@@ -183,5 +191,5 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 ### Highest-priority remaining work
 - `[ ]` Finish production environment setup for KV, Durable Objects, Analytics, service bindings, and secrets
 - `[ ]` Wire Grafana Cloud datasource/imports and Analytics query credentials in production
-- `[ ]` Add Terraform/IaC for Cloudflare resources
-- `[ ]` Add load/performance testing and document real targets/results
+- `[ ]` Apply/import the Terraform scaffold against the production account
+- `[ ]` Run and archive production benchmark results and tighten thresholds from observed traffic

@@ -19,6 +19,7 @@
     "setup:local-auth": "node scripts/setup_local_auth.mjs",
     "smoke:local": "node scripts/smoke_test.mjs",
     "token:dev": "node scripts/generate_dev_jwt.mjs",
+    "benchmark:gateway": "node scripts/benchmark_gateway.mjs",
     "lint": "echo 'Add lint scripts later'",
     "test": "vitest run",
     "test:watch": "vitest"

@@ -288,6 +288,25 @@ Grafana provisioning artifacts live in:
 - [llm-platform-dashboard.json](/Users/ethan/Dev/LLM-Inference-Platform/grafana/llm-platform-dashboard.json)
 - [llm-platform-alerts.yaml](/Users/ethan/Dev/LLM-Inference-Platform/grafana/llm-platform-alerts.yaml)
 
+## Terraform and Hardening
+
+Phase 6 adds Terraform scaffolding, a manual JWT rotation workflow, and a benchmark path. See [phase-6-ci-cd-iac-hardening.md](/Users/ethan/Dev/LLM-Inference-Platform/docs/phase-6-ci-cd-iac-hardening.md).
+
+Terraform scaffold:
+
+- [infra/terraform/README.md](/Users/ethan/Dev/LLM-Inference-Platform/infra/terraform/README.md)
+
+Manual workflows:
+
+- [rotate-gateway-jwt.yml](/Users/ethan/Dev/LLM-Inference-Platform/.github/workflows/rotate-gateway-jwt.yml)
+- [benchmark.yml](/Users/ethan/Dev/LLM-Inference-Platform/.github/workflows/benchmark.yml)
+
+Benchmark locally or against a deployed environment:
+
+```bash
+BENCHMARK_JWT=<jwt> npm run benchmark:gateway -- https://llm-gateway-staging.<your-subdomain>.workers.dev --requests 20 --concurrency 4 --out benchmarks/report.json
+```
+
 ## CI
 
 The repo includes [ci.yml](/Users/ethan/Dev/LLM-Inference-Platform/.github/workflows/ci.yml) to run `npm ci`, `npm test`, `npm run build`, and the local smoke suite on pushes and pull requests.

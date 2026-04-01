@@ -1,0 +1,65 @@
+name: Benchmark Gateway
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Benchmark target environment"
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+      requests:
+        description: "Total benchmark requests"
+        required: true
+        default: "20"
+        type: string
+      concurrency:
+        description: "Concurrent benchmark workers"
+        required: true
+        default: "4"
+        type: string
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      GATEWAY_URL: ${{ inputs.environment == 'production' && vars.PRODUCTION_GATEWAY_URL || vars.STAGING_GATEWAY_URL }}
+      BENCHMARK_JWT: ${{ inputs.environment == 'production' && secrets.PRODUCTION_SMOKE_JWT || secrets.STAGING_SMOKE_JWT }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate benchmark configuration
+        run: |
+          test -n "$GATEWAY_URL" || (echo "Missing gateway URL variable for selected environment" && exit 1)
+          test -n "$BENCHMARK_JWT" || (echo "Missing smoke/admin JWT for selected environment" && exit 1)
+
+      - name: Run benchmark
+        run: |
+          npm run benchmark:gateway -- "${GATEWAY_URL%/}" \
+            --requests "${{ inputs.requests }}" \
+            --concurrency "${{ inputs.concurrency }}" \
+            --threshold-p95-ttft-ms 5000 \
+            --threshold-p95-total-ms 15000 \
+            --threshold-error-rate 0.01 \
+            --out benchmarks/report.json
+
+      - name: Upload benchmark report
+        uses: actions/upload-artifact@v4
+        with:
+          name: gateway-benchmark-${{ inputs.environment }}
+          path: benchmarks/report.json
