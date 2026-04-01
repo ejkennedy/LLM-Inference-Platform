@@ -94,14 +94,8 @@ SELECT
   SUM(_sample_interval) AS requests,
   SUM(_sample_interval * double5) AS estimated_cost_cents,
   SUM(_sample_interval * double6) AS actual_cost_cents,
-  CASE
-    WHEN SUM(_sample_interval) = 0 THEN 0
-    ELSE SUM(_sample_interval * double7) / SUM(_sample_interval)
-  END AS cache_hit_rate,
-  CASE
-    WHEN SUM(_sample_interval) = 0 THEN 0
-    ELSE SUM(_sample_interval * double8) / SUM(_sample_interval)
-  END AS error_rate,
+  SUM(_sample_interval * double7) / SUM(_sample_interval) AS cache_hit_rate,
+  SUM(_sample_interval * double8) / SUM(_sample_interval) AS error_rate,
   QUANTILEWEIGHTED(0.5)(double3, _sample_interval) AS p50_ttft_ms,
   QUANTILEWEIGHTED(0.95)(double3, _sample_interval) AS p95_ttft_ms,
   QUANTILEWEIGHTED(0.95)(double4, _sample_interval) AS p95_total_ms
@@ -123,14 +117,8 @@ SELECT
   SUM(_sample_interval) AS requests,
   SUM(_sample_interval * double5) AS estimated_cost_cents,
   SUM(_sample_interval * double6) AS actual_cost_cents,
-  CASE
-    WHEN SUM(_sample_interval) = 0 THEN 0
-    ELSE SUM(_sample_interval * double7) / SUM(_sample_interval)
-  END AS cache_hit_rate,
-  CASE
-    WHEN SUM(_sample_interval) = 0 THEN 0
-    ELSE SUM(_sample_interval * double8) / SUM(_sample_interval)
-  END AS error_rate,
+  SUM(_sample_interval * double7) / SUM(_sample_interval) AS cache_hit_rate,
+  SUM(_sample_interval * double8) / SUM(_sample_interval) AS error_rate,
   QUANTILEWEIGHTED(0.95)(double3, _sample_interval) AS p95_ttft_ms,
   QUANTILEWEIGHTED(0.95)(double4, _sample_interval) AS p95_total_ms
 FROM ${dataset}
