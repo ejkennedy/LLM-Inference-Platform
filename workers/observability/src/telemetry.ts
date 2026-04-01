@@ -91,7 +91,7 @@ export function buildCostSummaryQuery(
 
   return `
 SELECT
-  SUM(_sample_interval) AS requests,
+  COUNT() AS requests,
   SUM(_sample_interval * double5) AS estimated_cost_cents,
   SUM(_sample_interval * double6) AS actual_cost_cents,
   SUM(_sample_interval * double7) / SUM(_sample_interval) AS cache_hit_rate,
@@ -114,7 +114,7 @@ export function buildModelBreakdownQuery(
   return `
 SELECT
   blob2 AS model,
-  SUM(_sample_interval) AS requests,
+  COUNT() AS requests,
   SUM(_sample_interval * double5) AS estimated_cost_cents,
   SUM(_sample_interval * double6) AS actual_cost_cents,
   SUM(_sample_interval * double7) / SUM(_sample_interval) AS cache_hit_rate,

@@ -82,6 +82,7 @@ describe("observability telemetry helpers", () => {
     expect(query).toContain("blob1 = 'tenant-1'");
     expect(query).not.toContain("NULLIF");
     expect(query).not.toContain("CASE");
+    expect(query).toContain("COUNT() AS requests");
     expect(query).toContain("SUM(_sample_interval * double7) / SUM(_sample_interval)");
   });
 
