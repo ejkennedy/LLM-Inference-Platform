@@ -10,3 +10,11 @@ name = "llm-router-staging"
 
 [env.production]
 name = "llm-router"
+
+[[env.staging.kv_namespaces]]
+binding = "MODEL_CATALOGUE"
+id = "9736e521560746e29aaaec4b018097b9"
+
+[[env.production.kv_namespaces]]
+binding = "MODEL_CATALOGUE"
+id = "39659a4d403045e7bcabb9b9610f387a"
