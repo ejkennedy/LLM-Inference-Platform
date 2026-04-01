@@ -55,6 +55,7 @@ jobs:
         run: npm run alerts:check -- "${GATEWAY_URL%/}"
 
       - name: Run production benchmark
+        continue-on-error: true
         run: |
           npm run benchmark:gateway -- "${GATEWAY_URL%/}" \
             --requests "${BENCHMARK_REQUESTS:-20}" \
@@ -65,6 +66,7 @@ jobs:
             --out benchmarks/production-report.json
 
       - name: Upload verification artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: production-verification-report

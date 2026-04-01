@@ -122,6 +122,11 @@ Checks included:
 - alert threshold evaluation
 - latency/error benchmark with artifact upload
 
+Operational behavior:
+
+- smoke and alert checks are hard-fail gates
+- the benchmark step is artifact-producing and non-blocking by default, so tail latency spikes still surface without making the whole verification workflow unusable
+
 Recommended production GitHub environment configuration:
 
 - variable `GATEWAY_URL` or `PRODUCTION_GATEWAY_URL`

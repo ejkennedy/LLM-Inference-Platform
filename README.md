@@ -375,6 +375,8 @@ For a production-only verification pipeline without deploys, use [verify-product
 
 against the production gateway on a schedule or manual dispatch.
 
+In that workflow, smoke and alert checks are hard-fail gates. The benchmark still runs and uploads an artifact, but it does not fail the whole job by default when tail latency spikes exceed the configured thresholds.
+
 Current status: the staging path has been validated end to end with Auth0-issued JWTs, Cloudflare AI Gateway, normalized SSE streaming, and Durable Object usage accounting.
 Phase 5 has also now been validated in staging end to end: streaming requests publish structured telemetry, Analytics Engine stores the events, and `GET /v1/admin/cost-summary` returns non-zero request, cost, and latency aggregates.
 
