@@ -133,10 +133,18 @@ async function runAnalyticsQuery(
   }
 
   const payload = (await response.json()) as {
+    data?: Array<Record<string, unknown>>;
+    rows?: number;
     result?: {
       rows?: Array<Record<string, unknown>>;
     };
   };
+
+  if (Array.isArray(payload.data)) {
+    return {
+      rows: payload.data
+    };
+  }
 
   return payload.result ?? {};
 }
