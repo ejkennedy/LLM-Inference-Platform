@@ -1,0 +1,64 @@
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: llm-platform
+    folder: LLM Inference Platform
+    interval: 1m
+    rules:
+      - uid: llm-daily-cost
+        title: Daily Cost Exceeded
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 86400
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: llm_actual_cost_cents
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: A > 1000
+              type: math
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+      - uid: llm-error-rate
+        title: Error Rate Above 1 Percent
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: llm_error_rate
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: A > 0.01
+              type: math
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+      - uid: llm-ttft-p95
+        title: P95 TTFT Above 5 Seconds
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: llm_ttft_p95_ms
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: A > 5000
+              type: math
+        noDataState: NoData
+        execErrState: Error
+        for: 10m

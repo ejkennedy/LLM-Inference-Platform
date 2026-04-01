@@ -15,6 +15,7 @@ Cloudflare Workers monorepo for a portfolio-grade LLM gateway. The current slice
 - `POST /v1/chat` accepts chat messages, resolves a model through the router worker, and streams Workers AI output.
 - Streaming responses are normalized into gateway-owned SSE events: `meta`, `token`, `usage`, `summary`, then `[DONE]`.
 - `GET /v1/usage` returns the authenticated user’s current minute request count and tracked budget state.
+- `GET /v1/admin/cost-summary` returns an admin-only near-real-time aggregate cost summary for the selected tenant window.
 - `GET /v1/usage` now falls back to the token’s claim budget before the first billed request, so fresh sessions report the configured budget instead of zeroes.
 - Request IDs are generated at the edge and returned via `X-Request-Id`.
 - A Durable Object-backed limiter enforces a simple per-user requests-per-minute guard.
@@ -119,7 +120,14 @@ curl 'http://127.0.0.1:8787/v1/admin/usage?userId=demo-user&limit=10' \
   -H 'Authorization: Bearer <admin-jwt>'
 ```
 
-11. Use a registered prompt template.
+11. Inspect admin cost summary.
+
+```bash
+curl 'http://127.0.0.1:8787/v1/admin/cost-summary?windowHours=24&tenantId=demo-tenant' \
+  -H 'Authorization: Bearer <admin-jwt>'
+```
+
+12. Use a registered prompt template.
 
 ```bash
 curl --no-buffer \
@@ -254,6 +262,31 @@ Relevant gateway variables:
 - `RATE_LIMIT_REQUESTS_PER_MINUTE`
 - `RATE_LIMIT_RESERVATION_TTL_SECONDS`
 - `BILLING_LEDGER_LIMIT`
+
+## Observability and Cost Metering
+
+Phase 5 adds a structured observability schema, Analytics Engine-backed aggregation, Prometheus-style metrics output, and an admin cost-summary path. See [phase-5-observability-cost-metering.md](/Users/ethan/Dev/LLM-Inference-Platform/docs/phase-5-observability-cost-metering.md).
+
+The observability worker now exposes internal-only endpoints for:
+
+- `/internal/cost-summary`
+- `/internal/metrics-summary`
+- `/internal/metrics/prometheus`
+
+The gateway exposes:
+
+- `GET /v1/admin/cost-summary`
+
+Observability query configuration:
+
+- `ANALYTICS_ACCOUNT_ID`
+- `ANALYTICS_API_TOKEN`
+- optional `ANALYTICS_DATASET`
+
+Grafana provisioning artifacts live in:
+
+- [llm-platform-dashboard.json](/Users/ethan/Dev/LLM-Inference-Platform/grafana/llm-platform-dashboard.json)
+- [llm-platform-alerts.yaml](/Users/ethan/Dev/LLM-Inference-Platform/grafana/llm-platform-alerts.yaml)
 
 ## CI
 

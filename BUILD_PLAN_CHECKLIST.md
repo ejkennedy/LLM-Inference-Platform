@@ -123,20 +123,26 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 
 ## Phase 5: Observability & Cost Metering
 
+- `[x]` Repo-owned Phase 5 implementation is complete
+- `[-]` Production rollout still requires Cloudflare Analytics query credentials plus Grafana Cloud datasource/import setup
+
 ### Structured logging schema
 - `[x]` Observability worker exists
 - `[x]` Gateway publishes structured observation events
 - `[x]` Request-linked telemetry path exists
-- `[-]` Logging is basic and local; no mature redaction policy or downstream log platform config is committed
+- `[x]` Structured log schema now includes request, routing, latency, cost, and cache fields
+- `[x]` User identifiers are hashed before log emission and raw prompt content is excluded by default
 
 ### Metrics export to Grafana Cloud
 - `[x]` Analytics Engine binding support exists in the observability worker
-- `[ ]` Grafana export job is not implemented
-- `[ ]` Metrics dashboard provisioning is not implemented
+- `[x]` Observability worker exposes internal summary and Prometheus-style metrics endpoints
+- `[x]` Grafana dashboard provisioning artifact is committed
+- `[x]` Grafana alert rules artifact is committed
 
 ### Cost dashboard & alerts
-- `[ ]` No Grafana dashboard or alert definitions are committed
-- `[ ]` No admin cost-summary endpoint beyond `/v1/usage`
+- `[x]` Cost dashboard provisioning artifact is committed
+- `[x]` Alert rule definitions are committed
+- `[x]` Admin cost-summary endpoint exists beyond `/v1/usage`
 
 ## Phase 6: CI/CD, IaC & Production Hardening
 
@@ -171,9 +177,10 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 - `[x]` CI pipeline
 - `[x]` CD workflow scaffold
 - `[x]` Staging deployment validated end to end with Auth0, AI Gateway, and usage accounting
+- `[x]` Structured telemetry, aggregated cost summary, and dashboard artifacts
 
 ### Highest-priority remaining work
 - `[ ]` Finish production environment setup for KV, Durable Objects, Analytics, service bindings, and secrets
-- `[ ]` Add real observability dashboards and alerts
+- `[ ]` Wire Grafana Cloud datasource/imports and Analytics query credentials in production
 - `[ ]` Add Terraform/IaC for Cloudflare resources
 - `[ ]` Add load/performance testing and document real targets/results

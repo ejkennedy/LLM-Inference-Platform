@@ -24,6 +24,15 @@ type StreamMeta = {
   cacheStatus?: string;
 };
 
+export type StreamCompletionSummary = {
+  completionText: string;
+  usage?: StreamUsage;
+  finishReason?: string;
+  ttftMs?: number;
+  totalMs: number;
+  error?: string;
+};
+
 export async function normalizeReadableAiStream(
   stream: ReadableStream<Uint8Array>,
   requestId: string,
@@ -31,6 +40,7 @@ export async function normalizeReadableAiStream(
   options?: {
     extraHeaders?: HeadersInit;
     meta?: Partial<StreamMeta>;
+    onComplete?: (summary: StreamCompletionSummary) => void | Promise<void>;
   }
 ): Promise<Response> {
   const encoder = new TextEncoder();
@@ -40,6 +50,8 @@ export async function normalizeReadableAiStream(
   let pending = "";
   let usage: StreamUsage | undefined;
   let finishReason: string | undefined;
+  let ttftMs: number | undefined;
+  const startTs = Date.now();
 
   const readable = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -81,6 +93,7 @@ export async function normalizeReadableAiStream(
           }
 
           if (parsed.error) {
+            const totalMs = Date.now() - startTs;
             controller.enqueue(
               encoder.encode(
                 toSseFrame("error", {
@@ -91,10 +104,21 @@ export async function normalizeReadableAiStream(
             controller.enqueue(encoder.encode(toSummaryFrame(completionText, usage, finishReason)));
             controller.enqueue(encoder.encode("data: [DONE]\n\n"));
             controller.close();
+            void options?.onComplete?.({
+              completionText,
+              usage,
+              finishReason,
+              ttftMs,
+              totalMs,
+              error: parsed.error
+            });
             return;
           }
 
           if (parsed.response) {
+            if (ttftMs == null) {
+              ttftMs = Date.now() - startTs;
+            }
             completionText += parsed.response;
             controller.enqueue(
               encoder.encode(
@@ -115,9 +139,17 @@ export async function normalizeReadableAiStream(
         }
       }
 
+      const totalMs = Date.now() - startTs;
       controller.enqueue(encoder.encode(toSummaryFrame(completionText, usage, finishReason)));
       controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       controller.close();
+      void options?.onComplete?.({
+        completionText,
+        usage,
+        finishReason,
+        ttftMs,
+        totalMs
+      });
     },
     async cancel() {
       await reader.cancel();
@@ -136,12 +168,16 @@ export async function normalizeIterableAiStream(
   options?: {
     extraHeaders?: HeadersInit;
     meta?: Partial<StreamMeta>;
+    onComplete?: (summary: StreamCompletionSummary) => void | Promise<void>;
   }
 ): Promise<Response> {
   const encoder = new TextEncoder();
   let completionText = "";
   let usage: StreamUsage | undefined;
   let finishReason: string | undefined;
+  let ttftMs: number | undefined;
+  let terminalError: string | undefined;
+  const startTs = Date.now();
 
   const readable = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -167,6 +203,7 @@ export async function normalizeIterableAiStream(
         }
 
         if (chunk.error) {
+          terminalError = chunk.error;
           controller.enqueue(
             encoder.encode(toSseFrame("error", { message: chunk.error }))
           );
@@ -174,6 +211,9 @@ export async function normalizeIterableAiStream(
         }
 
         if (chunk.response) {
+          if (ttftMs == null) {
+            ttftMs = Date.now() - startTs;
+          }
           completionText += chunk.response;
           controller.enqueue(
             encoder.encode(toSseFrame("token", { delta: chunk.response }))
@@ -193,9 +233,18 @@ export async function normalizeIterableAiStream(
         }
       }
 
+      const totalMs = Date.now() - startTs;
       controller.enqueue(encoder.encode(toSummaryFrame(completionText, usage, finishReason)));
       controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       controller.close();
+      void options?.onComplete?.({
+        completionText,
+        usage,
+        finishReason,
+        ttftMs,
+        totalMs,
+        error: terminalError
+      });
     }
   });
 

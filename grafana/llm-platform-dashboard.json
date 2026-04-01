@@ -1,0 +1,76 @@
+{
+  "title": "LLM Inference Platform",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "tags": ["llm", "cloudflare", "gateway"],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Total Spend",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "llm_actual_cost_cents"
+        }
+      ],
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 }
+    },
+    {
+      "id": 2,
+      "title": "Request Rate",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "llm_requests_total"
+        }
+      ],
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 }
+    },
+    {
+      "id": 3,
+      "title": "Cache Hit Rate",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "llm_cache_hit_rate"
+        }
+      ],
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 }
+    },
+    {
+      "id": 4,
+      "title": "Error Rate",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "llm_error_rate"
+        }
+      ],
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 }
+    },
+    {
+      "id": 5,
+      "title": "P95 TTFT",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "llm_ttft_p95_ms"
+        }
+      ],
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 }
+    },
+    {
+      "id": 6,
+      "title": "Actual Cost By Model",
+      "type": "bargauge",
+      "targets": [
+        {
+          "expr": "llm_model_actual_cost_cents"
+        }
+      ],
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 }
+    }
+  ]
+}

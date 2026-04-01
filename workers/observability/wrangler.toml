@@ -5,8 +5,21 @@ compatibility_date = "2025-12-01"
 [build]
 command = "npm run build"
 
+[[analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "llm_requests"
+
+[vars]
+ANALYTICS_DATASET = "llm_requests"
+
 [env.staging]
 name = "llm-observability-staging"
 
+[env.staging.vars]
+ANALYTICS_DATASET = "llm_requests"
+
 [env.production]
 name = "llm-observability"
+
+[env.production.vars]
+ANALYTICS_DATASET = "llm_requests"

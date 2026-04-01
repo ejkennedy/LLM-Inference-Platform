@@ -2,6 +2,7 @@ import type {
   AdminUsageResponse,
   BillingLedgerEntry,
   BudgetState,
+  CostSummaryResponse,
   GatewayRequest,
   HealthResponse,
   ObservabilityEvent,
@@ -23,7 +24,8 @@ import { buildProviderAllowlist, runInference } from "./provider";
 import { applyPromptEntry, resolvePromptEntry } from "./prompts";
 import {
   normalizeIterableAiStream,
-  normalizeReadableAiStream
+  normalizeReadableAiStream,
+  type StreamCompletionSummary
 } from "./sse";
 
 export interface Env {
@@ -119,6 +121,18 @@ export default {
         return withCors(json(usage));
       }
 
+      if (request.method === "GET" && url.pathname === "/v1/admin/cost-summary") {
+        const claims = await authenticateRequest(request, authConfig(env));
+        requireAdminClaims(claims);
+        const windowHours = parsePositiveInt(url.searchParams.get("windowHours"), 24);
+        const tenantId = url.searchParams.get("tenantId") ?? claims.tenantId;
+        const summary = await getCostSummary(env, {
+          windowHours,
+          tenantId
+        });
+        return withCors(json(summary));
+      }
+
       if (request.method !== "POST" || url.pathname !== "/v1/chat") {
         return withCors(new Response("Not Found", { status: 404 }));
       }
@@ -130,6 +144,7 @@ export default {
       const promptEntry = await resolvePromptEntry(env, payload);
       const messages = applyPromptEntry(payload.messages ?? [], promptEntry);
       const promptTokensEstimate = estimatePromptTokens(messages);
+      const startTs = Date.now();
 
       if (messages.length === 0) {
         return withCors(
@@ -183,16 +198,6 @@ export default {
         );
       }
 
-      ctx.waitUntil(
-        publishObservation(env, {
-          requestId,
-          userId: claims.sub,
-          model: routing.resolvedModel,
-          promptTokens: promptTokensEstimate,
-          costCents: routing.expectedCostCents
-        })
-      );
-
       const streamEnabled = payload.stream ?? true;
       const upstream = await runInference(
         env,
@@ -213,7 +218,21 @@ export default {
             routing,
             {
               extraHeaders: upstream.responseHeaders,
-              meta: upstream.meta
+              meta: upstream.meta,
+              onComplete: (summary) =>
+                ctx.waitUntil(
+                  publishFinalObservation(
+                    env,
+                    requestId,
+                    claims,
+                    routing,
+                    upstream.meta?.cacheStatus,
+                    promptEntry,
+                    promptTokensEstimate,
+                    routing.expectedCostCents,
+                    summary
+                  )
+                )
             }
           );
           ctx.waitUntil(
@@ -246,7 +265,21 @@ export default {
           routing,
           {
             extraHeaders: upstream.responseHeaders,
-            meta: upstream.meta
+            meta: upstream.meta,
+            onComplete: (summary) =>
+              ctx.waitUntil(
+                publishFinalObservation(
+                  env,
+                  requestId,
+                  claims,
+                  routing,
+                  upstream.meta?.cacheStatus,
+                  promptEntry,
+                  promptTokensEstimate,
+                  routing.expectedCostCents,
+                  summary
+                )
+              )
           }
         );
         ctx.waitUntil(
@@ -269,11 +302,21 @@ export default {
           }),
           publishObservation(env, {
             requestId,
+            tenantId: claims.tenantId,
             userId: claims.sub,
             model: routing.resolvedModel,
             promptTokens: promptTokensEstimate,
             completionTokens: estimateTextTokens(completion.outputText),
-            costCents: routing.expectedCostCents
+            totalMs: Date.now() - startTs,
+            estimatedCostCents: routing.expectedCostCents,
+            actualCostCents: routing.expectedCostCents,
+            cacheStatus: upstream.meta?.cacheStatus,
+            cacheHit: upstream.meta?.cacheStatus === "HIT",
+            routingReason: routing.reason,
+            via: routing.via,
+            statusCode: 200,
+            promptId: promptEntry?.promptId,
+            promptVersion: promptEntry?.version
           })
         ])
       );
@@ -617,6 +660,32 @@ async function getAdminUsageSummary(
   return (await response.json()) as AdminUsageResponse;
 }
 
+async function getCostSummary(
+  env: Env,
+  params: {
+    windowHours: number;
+    tenantId?: string;
+  }
+): Promise<CostSummaryResponse> {
+  const searchParams = new URLSearchParams({
+    windowHours: String(params.windowHours)
+  });
+
+  if (params.tenantId) {
+    searchParams.set("tenantId", params.tenantId);
+  }
+
+  const response = await env.OBSERVABILITY.fetch(
+    `https://observability.internal/internal/cost-summary?${searchParams.toString()}`
+  );
+
+  if (!response.ok) {
+    throw new Error(`Observability cost summary failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as CostSummaryResponse;
+}
+
 async function publishObservation(env: Env, event: ObservabilityEvent): Promise<void> {
   const response = await env.OBSERVABILITY.fetch("https://observability.internal/events", {
     method: "POST",
@@ -629,6 +698,45 @@ async function publishObservation(env: Env, event: ObservabilityEvent): Promise<
   if (!response.ok) {
     throw new Error(`Observability worker failed with status ${response.status}`);
   }
+}
+
+async function publishFinalObservation(
+  env: Env,
+  requestId: string,
+  claims: {
+    sub: string;
+    tenantId: string;
+  },
+  routing: RouterResponse,
+  cacheStatus: string | undefined,
+  promptEntry: { promptId: string; version: string } | undefined,
+  promptTokens: number,
+  estimatedCostCents: number,
+  summary: StreamCompletionSummary
+): Promise<void> {
+  await publishObservation(env, {
+    requestId,
+    tenantId: claims.tenantId,
+    userId: claims.sub,
+    model: routing.resolvedModel,
+    promptTokens,
+    completionTokens:
+      summary.usage?.completionTokens
+      ?? estimateTextTokens(summary.completionText),
+    ttftMs: summary.ttftMs,
+    totalMs: summary.totalMs,
+    estimatedCostCents,
+    actualCostCents: estimatedCostCents,
+    cacheStatus,
+    cacheHit: cacheStatus === "HIT",
+    routingReason: routing.reason,
+    via: routing.via,
+    statusCode: summary.error ? 502 : 200,
+    errorClass: summary.error ? "upstream_stream_error" : undefined,
+    promptId: promptEntry?.promptId,
+    promptVersion: promptEntry?.version,
+    finishReason: summary.finishReason
+  });
 }
 
 function normalizeJsonCompletion(

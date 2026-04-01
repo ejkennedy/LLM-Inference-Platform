@@ -135,11 +135,52 @@ export type PromptRegistryEntry = {
 
 export type ObservabilityEvent = {
   requestId: string;
+  tenantId: string;
   userId?: string;
   model: string;
   promptTokens: number;
   completionTokens?: number;
-  costCents: number;
+  ttftMs?: number;
+  totalMs?: number;
+  estimatedCostCents: number;
+  actualCostCents?: number;
+  cacheStatus?: string;
+  cacheHit?: boolean;
+  routingReason?: string;
+  via?: 'workers-ai' | 'external';
+  statusCode?: number;
+  errorClass?: string;
+  promptId?: string;
+  promptVersion?: string;
+  finishReason?: string;
+};
+
+export type CostSummaryBucket = {
+  model: string;
+  requests: number;
+  estimatedCostCents: number;
+  actualCostCents: number;
+  cacheHitRate: number;
+  errorRate: number;
+  p95TtftMs?: number;
+  p95TotalMs?: number;
+};
+
+export type CostSummaryResponse = {
+  windowHours: number;
+  freshness: 'near-real-time';
+  generatedAt: string;
+  totals: {
+    requests: number;
+    estimatedCostCents: number;
+    actualCostCents: number;
+    cacheHitRate: number;
+    errorRate: number;
+    p50TtftMs?: number;
+    p95TtftMs?: number;
+    p95TotalMs?: number;
+  };
+  models: CostSummaryBucket[];
 };
 
 export type RateLimitCheckRequest = {
