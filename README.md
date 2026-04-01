@@ -1,6 +1,6 @@
 # LLM Inference Platform
 
-Cloudflare Workers monorepo for a portfolio-grade LLM gateway. The current slice focuses on a clean edge request path: gateway entry, router-backed model resolution, Workers AI inference, SSE streaming, and structured telemetry hooks.
+Production-oriented Cloudflare Workers monorepo for an edge-native LLM gateway. The platform includes authenticated chat inference, router-backed model selection, Workers AI and external-provider fallback, AI Gateway integration, prompt registry support, usage accounting, and Analytics Engine-backed observability.
 
 ## Packages
 
@@ -9,7 +9,22 @@ Cloudflare Workers monorepo for a portfolio-grade LLM gateway. The current slice
 - `workers/observability`: structured telemetry sink backed by Analytics Engine.
 - `shared/types`: shared contracts for the worker boundary.
 
-## Current MVP
+## Project Status
+
+Repo implementation is complete and the staged platform has been validated end to end:
+
+- authenticated chat inference
+- router-based model resolution and fallback
+- stable SSE streaming contract
+- Durable Object rate limiting and budget tracking
+- AI Gateway routing for Workers AI
+- prompt registry and cache controls
+- Analytics Engine-backed cost and latency summaries
+- CI/CD, smoke tests, benchmarks, and scheduled verification workflows
+
+The remaining work is operational and environment-specific rather than missing product code.
+
+## Features
 
 - `GET /health` on each worker returns a lightweight health payload.
 - `POST /v1/chat` accepts chat messages, resolves a model through the router worker, and streams Workers AI output.
@@ -19,9 +34,9 @@ Cloudflare Workers monorepo for a portfolio-grade LLM gateway. The current slice
 - `GET /v1/usage` now falls back to the token’s claim budget before the first billed request, so fresh sessions report the configured budget instead of zeroes.
 - Request IDs are generated at the edge and returned via `X-Request-Id`.
 - A Durable Object-backed limiter enforces a simple per-user requests-per-minute guard.
-- `Authorization: Bearer <jwt>` is required for chat and usage endpoints, using an `HS256` token verified with `JWT_SECRET`.
+- `Authorization: Bearer <jwt>` is required for protected endpoints, with support for either shared-secret JWT verification or JWKS-backed issuer/audience validation.
 - The gateway emits lightweight request metadata to the observability worker through a Cloudflare service binding.
-- The router supports free-tier model capping and simple budget-aware fallback.
+- The router supports free-tier model capping, budget-aware fallback, and external-provider routing.
 
 ## Getting Started
 
@@ -380,8 +395,9 @@ In that workflow, smoke and alert checks are hard-fail gates. The benchmark stil
 Current status: the staging path has been validated end to end with Auth0-issued JWTs, Cloudflare AI Gateway, normalized SSE streaming, and Durable Object usage accounting.
 Phase 5 has also now been validated in staging end to end: streaming requests publish structured telemetry, Analytics Engine stores the events, and `GET /v1/admin/cost-summary` returns non-zero request, cost, and latency aggregates.
 
-## Remaining Gaps
+## Optional Operational Extensions
 
-- Terraform/IaC for Cloudflare resources and environment bindings.
-- Load/performance benchmarking artifacts and documented thresholds.
-- Production alert webhook/contact routing and scheduled-workflow verification.
+- Apply or import the Terraform scaffold against a live Cloudflare account.
+- Tune benchmark thresholds from long-running production observations.
+- Add webhook/contact routing for scheduled alert notifications.
+- Connect the optional Prometheus/Grafana path if you want external dashboards.

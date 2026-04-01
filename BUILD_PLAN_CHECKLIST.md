@@ -192,9 +192,10 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 - `[x]` Structured telemetry, aggregated cost summary, and dashboard artifacts
 - `[x]` Staging observability and cost summary validated end to end with Analytics Engine
 - `[x]` Native scheduled alerting path using the admin cost summary endpoint
+- `[x]` Production-only verification workflow exists and has been exercised against the live deployment
 
-### Highest-priority remaining work
-- `[ ]` Finish production environment setup for KV, Durable Objects, Analytics, service bindings, and secrets
-- `[ ]` Apply/import the Terraform scaffold against the production account
-- `[ ]` Run and archive production benchmark results and tighten thresholds from observed traffic
-- `[ ]` Configure production alert webhook/contact routing and verify the scheduled alert workflow
+### Optional Operational Follow-Ups
+- `[ ]` Apply/import the Terraform scaffold against the production account if you want full infrastructure codification
+- `[ ]` Tighten benchmark thresholds from longer-running production observations
+- `[ ]` Configure production alert webhook/contact routing if you want outbound notifications
+- `[ ]` Add the optional Prometheus/Grafana path if you want external dashboards
