@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildCostSummaryQuery,
@@ -11,6 +11,10 @@ import {
 } from "../workers/observability/src/telemetry";
 
 describe("observability telemetry helpers", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("builds a structured log event with a redacted user hash", async () => {
     const event = await buildStructuredLogEvent({
       requestId: "req-1",
@@ -130,4 +134,5 @@ describe("observability telemetry helpers", () => {
     expect(isInternalRequest(new URL("https://localhost/internal/metrics-summary"))).toBe(true);
     expect(isInternalRequest(new URL("https://llm-observability.example.com/events"))).toBe(false);
   });
+
 });

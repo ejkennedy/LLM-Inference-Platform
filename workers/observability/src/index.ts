@@ -19,6 +19,7 @@ export interface Env {
   ANALYTICS_ACCOUNT_ID?: string;
   ANALYTICS_API_TOKEN?: string;
   ANALYTICS_DATASET?: string;
+  METRICS_API_KEY?: string;
 }
 
 export default {
@@ -61,6 +62,19 @@ export default {
       return new Response(toPrometheusMetrics(summary), {
         headers: {
           "Content-Type": "text/plain; version=0.0.4"
+        }
+      });
+    }
+
+    if (request.method === "GET" && url.pathname === "/metrics/prometheus") {
+      ensureMetricsAccess(request, env);
+      const windowHours = parsePositiveInt(url.searchParams.get("windowHours"), 24);
+      const tenantId = url.searchParams.get("tenantId") ?? undefined;
+      const summary = await queryCostSummary(env, windowHours, tenantId);
+      return new Response(toPrometheusMetrics(summary), {
+        headers: {
+          "Content-Type": "text/plain; version=0.0.4",
+          "Cache-Control": "no-store"
         }
       });
     }
@@ -151,6 +165,16 @@ async function runAnalyticsQuery(
 
 function ensureInternalRequest(url: URL): void {
   if (!isInternalRequest(url)) {
+    throw new Response("Forbidden", { status: 403 });
+  }
+}
+
+function ensureMetricsAccess(request: Request, env: Env): void {
+  if (!env.METRICS_API_KEY) {
+    throw new Response("Metrics endpoint is not configured", { status: 503 });
+  }
+
+  if (request.headers.get("X-Metrics-Key") !== env.METRICS_API_KEY) {
     throw new Response("Forbidden", { status: 403 });
   }
 }

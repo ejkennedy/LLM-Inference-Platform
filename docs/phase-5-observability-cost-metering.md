@@ -53,6 +53,7 @@ The observability worker can always ingest events locally, but Analytics Engine 
 - `ANALYTICS_ACCOUNT_ID`
 - `ANALYTICS_API_TOKEN`
 - optional `ANALYTICS_DATASET` if you do not use the default `llm_requests`
+- `METRICS_API_KEY` if you want to expose the public Prometheus scrape endpoint
 
 Recommended token permission:
 
@@ -62,8 +63,11 @@ Recommended token permission:
 
 The cleanest integration is:
 
-1. Point a Prometheus-compatible scrape or Metrics Endpoint integration at:
-   - `GET /internal/metrics/prometheus`
+1. Set `METRICS_API_KEY` on the observability worker.
+2. Point a Prometheus-compatible scrape or Metrics Endpoint integration at:
+   - `GET /metrics/prometheus`
+3. Send the header:
+   - `X-Metrics-Key: <METRICS_API_KEY>`
 2. Import `grafana/llm-platform-dashboard.json`
 3. Import `grafana/llm-platform-alerts.yaml`
 
@@ -76,6 +80,10 @@ The Prometheus payload contains:
 - `llm_error_rate`
 - `llm_ttft_p95_ms`
 - per-model variants such as `llm_model_actual_cost_cents`
+
+Example production scrape URL:
+
+- `https://llm-observability.<your-workers-subdomain>.workers.dev/metrics/prometheus`
 
 ## Freshness semantics
 

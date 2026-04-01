@@ -273,6 +273,15 @@ The observability worker now exposes internal-only endpoints for:
 - `/internal/metrics-summary`
 - `/internal/metrics/prometheus`
 
+It also supports a public Prometheus scrape endpoint for Grafana or other external monitoring systems:
+
+- `/metrics/prometheus`
+
+This endpoint requires:
+
+- `METRICS_API_KEY`
+- request header `X-Metrics-Key: <METRICS_API_KEY>`
+
 The gateway exposes:
 
 - `GET /v1/admin/cost-summary`
@@ -282,6 +291,7 @@ Observability query configuration:
 - `ANALYTICS_ACCOUNT_ID`
 - `ANALYTICS_API_TOKEN`
 - optional `ANALYTICS_DATASET`
+- `METRICS_API_KEY` for the public Prometheus scrape endpoint
 
 Grafana provisioning artifacts live in:
 
