@@ -15,6 +15,7 @@ Cloudflare Workers monorepo for a portfolio-grade LLM gateway. The current slice
 - `POST /v1/chat` accepts chat messages, resolves a model through the router worker, and streams Workers AI output.
 - Streaming responses are normalized into gateway-owned SSE events: `meta`, `token`, `usage`, `summary`, then `[DONE]`.
 - `GET /v1/usage` returns the authenticated user’s current minute request count and tracked budget state.
+- `GET /v1/usage` now falls back to the token’s claim budget before the first billed request, so fresh sessions report the configured budget instead of zeroes.
 - Request IDs are generated at the edge and returned via `X-Request-Id`.
 - A Durable Object-backed limiter enforces a simple per-user requests-per-minute guard.
 - `Authorization: Bearer <jwt>` is required for chat and usage endpoints, using an `HS256` token verified with `JWT_SECRET`.
@@ -197,6 +198,8 @@ Configure any of these variables on the gateway worker to enable it:
 - `AI_GATEWAY_SKIP_CACHE=true`
 - `AI_GATEWAY_CACHE_TTL=120`
 
+The Workers AI path now uses the Cloudflare `AI` binding with gateway options rather than a manual HTTP fetch, which is the more stable setup for Workers AI traffic routed through AI Gateway.
+
 ## External Provider Fallback
 
 Phase 3 adds an OpenAI-compatible external provider fallback path. See [phase-3-routing-fallback.md](/Users/ethan/Dev/LLM-Inference-Platform/docs/phase-3-routing-fallback.md).
@@ -281,6 +284,8 @@ The deploy workflow now runs a full authenticated remote smoke suite after deplo
 
 If your environment still uses shared-secret auth, set `*_SMOKE_JWT_SECRET` and the workflow will generate a smoke token automatically.
 If your environment uses Auth0/JWKS, set `*_SMOKE_JWT` to a preissued token that already contains the required claims.
+
+Current status: the staging path has been validated end to end with Auth0-issued JWTs, Cloudflare AI Gateway, normalized SSE streaming, and Durable Object usage accounting.
 
 ## Remaining Gaps
 

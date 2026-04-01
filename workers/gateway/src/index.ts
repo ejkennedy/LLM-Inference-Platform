@@ -97,7 +97,10 @@ export default {
 
       if (request.method === "GET" && url.pathname === "/v1/usage") {
         const claims = await authenticateRequest(request, authConfig(env));
-        const usage = await getUsageSummary(env, claims.sub);
+        const usage = mergeUsageWithClaims(
+          await getUsageSummary(env, claims.sub),
+          claims.budgetLimitCents
+        );
         return withCors(json(usage));
       }
 
@@ -580,6 +583,21 @@ async function getUsageSummary(env: Env, userId: string): Promise<UsageSummary> 
   }
 
   return (await response.json()) as UsageSummary;
+}
+
+export function mergeUsageWithClaims(
+  usage: UsageSummary,
+  budgetLimitCents: number
+): UsageSummary {
+  if (usage.budgetLimitCents > 0) {
+    return usage;
+  }
+
+  return {
+    ...usage,
+    budgetLimitCents,
+    remainingBudgetCents: Math.max(budgetLimitCents - usage.estimatedSpendCents, 0)
+  };
 }
 
 async function getAdminUsageSummary(

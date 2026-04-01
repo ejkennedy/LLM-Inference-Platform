@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { RateLimiter } from "../workers/gateway/src/index";
+import { mergeUsageWithClaims, RateLimiter } from "../workers/gateway/src/index";
 
 class MemoryStorage {
   private readonly data = new Map<string, unknown>();
@@ -209,5 +209,24 @@ describe("gateway rate limiter durable object", () => {
       reason: "rate_limit"
     });
     expect(body.retryAfterSeconds).toBeGreaterThan(0);
+  });
+
+  it("merges token budget claims into an empty usage summary", () => {
+    expect(
+      mergeUsageWithClaims(
+        {
+          budgetLimitCents: 0,
+          estimatedSpendCents: 0,
+          remainingBudgetCents: 0,
+          requestCountCurrentMinute: 0,
+          currentMinuteBucket: 29583566
+        },
+        500
+      )
+    ).toMatchObject({
+      budgetLimitCents: 500,
+      estimatedSpendCents: 0,
+      remainingBudgetCents: 500
+    });
   });
 });

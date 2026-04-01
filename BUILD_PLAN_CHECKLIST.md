@@ -11,7 +11,7 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 ## Phase 1: Foundations & First Inference
 
 - `[x]` Repo-owned Phase 1 implementation is complete
-- `[-]` Cloudflare account-specific bindings, IDs, and environment values still need to be set in the target account
+- `[-]` Staging is now operationally validated end to end; production still needs its own Cloudflare account-specific bindings, IDs, secrets, and environment values
 
 ### Decision record + acceptance criteria
 - `[x]` Thin vertical slice exists: gateway, router, observability, shared types
@@ -47,6 +47,7 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 - `[x]` Optional AI Gateway integration exists in the gateway worker
 - `[-]` Basic cache controls exist through `AI_GATEWAY_SKIP_CACHE` and `AI_GATEWAY_CACHE_TTL`, but no tuned semantic cache policy is committed
 - `[x]` AI Gateway cache-control wiring is configurable in code and docs
+- `[x]` Staging Workers AI traffic has been validated through AI Gateway with the gateway-owned SSE contract
 
 ## Phase 2: Authentication & Rate Limiting
 
@@ -148,7 +149,8 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 - `[x]` Staging deployment lane exists
 - `[x]` Production deployment lane exists
 - `[x]` Post-deploy health smoke steps exist
-- `[-]` Real deployment requires repository/environment secrets and Cloudflare resource setup
+- `[x]` Authenticated remote smoke checks exist for deployed environments
+- `[-]` Real deployment still requires repository/environment secrets and Cloudflare resource setup
 
 ### Secret rotation & zero-downtime key updates
 - `[-]` JWT rotation support exists in gateway config and docs, but broader platform secret rotation automation is not implemented
@@ -168,11 +170,10 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 - `[x]` Unit tests
 - `[x]` CI pipeline
 - `[x]` CD workflow scaffold
+- `[x]` Staging deployment validated end to end with Auth0, AI Gateway, and usage accounting
 
 ### Highest-priority remaining work
-- `[ ]` Configure real Cloudflare resources for KV, Durable Objects, Analytics, service bindings, and environments
-- `[ ]` Add AI Gateway in front of inference
-- `[ ]` Add smoke tests that run against deployed staging with environment-specific credentials
+- `[ ]` Finish production environment setup for KV, Durable Objects, Analytics, service bindings, and secrets
 - `[ ]` Add real observability dashboards and alerts
 - `[ ]` Add Terraform/IaC for Cloudflare resources
 - `[ ]` Add load/performance testing and document real targets/results

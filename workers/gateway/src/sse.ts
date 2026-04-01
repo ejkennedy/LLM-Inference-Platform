@@ -106,8 +106,11 @@ export async function normalizeReadableAiStream(
           }
 
           if (parsed.usage) {
-            usage = normalizeUsage(parsed.usage);
-            controller.enqueue(encoder.encode(toSseFrame("usage", usage)));
+            const normalizedUsage = normalizeUsage(parsed.usage);
+            if (hasMeaningfulUsage(normalizedUsage)) {
+              usage = normalizedUsage;
+              controller.enqueue(encoder.encode(toSseFrame("usage", normalizedUsage)));
+            }
           }
         }
       }
@@ -178,8 +181,11 @@ export async function normalizeIterableAiStream(
         }
 
         if (chunk.usage) {
-          usage = normalizeUsage(chunk.usage);
-          controller.enqueue(encoder.encode(toSseFrame("usage", usage)));
+          const normalizedUsage = normalizeUsage(chunk.usage);
+          if (hasMeaningfulUsage(normalizedUsage)) {
+            usage = normalizedUsage;
+            controller.enqueue(encoder.encode(toSseFrame("usage", normalizedUsage)));
+          }
         }
 
         if (chunk.done) {
@@ -298,6 +304,12 @@ function normalizeUsage(usage: Record<string, unknown>): StreamUsage {
     completionTokens: toNumber(usage.completion_tokens),
     totalTokens: toNumber(usage.total_tokens)
   };
+}
+
+function hasMeaningfulUsage(usage: StreamUsage): boolean {
+  return (usage.promptTokens ?? 0) > 0
+    || (usage.completionTokens ?? 0) > 0
+    || (usage.totalTokens ?? 0) > 0;
 }
 
 function toNumber(value: unknown): number | undefined {
