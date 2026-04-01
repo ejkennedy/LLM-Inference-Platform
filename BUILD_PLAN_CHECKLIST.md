@@ -78,6 +78,9 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 
 ## Phase 3: Model Router & Cost-Aware Fallback
 
+- `[x]` Repo-owned Phase 3 implementation is complete
+- `[-]` Production rollout still requires real external-provider credentials, endpoint configuration, and per-provider operational tuning
+
 ### Router worker skeleton
 - `[x]` Router is a separate worker
 - `[x]` Gateway uses a service binding to call the router
@@ -88,12 +91,12 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 - `[x]` Free-tier cap exists
 - `[x]` Budget-based fallback exists
 - `[x]` Routing reason codes are returned
-- `[-]` Fallback logic currently targets the small in-code catalogue only
+- `[x]` Fallback logic spans the committed multi-provider catalogue and respects provider allowlists
 
 ### External API fallback path
-- `[ ]` External provider fallback is not implemented
-- `[ ]` External provider secret management is not implemented
-- `[ ]` Provider normalization/retry/circuit breaking is not implemented
+- `[x]` External provider fallback is implemented
+- `[x]` External provider secret/config management exists through gateway environment variables
+- `[x]` Provider normalization, retries, and circuit breaking are implemented
 
 ## Phase 4: Streaming, SSE & Prompt Caching
 
@@ -162,7 +165,6 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 ### Highest-priority remaining work
 - `[ ]` Configure real Cloudflare resources for KV, Durable Objects, Analytics, service bindings, and environments
 - `[ ]` Add AI Gateway in front of inference
-- `[ ]` Implement external provider fallback path
 - `[ ]` Add smoke tests that run against deployed staging with environment-specific credentials
 - `[ ]` Add real observability dashboards and alerts
 - `[ ]` Add Terraform/IaC for Cloudflare resources

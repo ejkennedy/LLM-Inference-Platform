@@ -55,6 +55,20 @@ describe("router policy", () => {
     expect(result.reason).toBe("budget-fallback");
   });
 
+  it("falls through to an external model when workers-ai is not allowed", () => {
+    const result = resolveRoute(
+      {
+        ...baseRequest,
+        requestedModel: "llama-3.1-70b",
+        providerAllowlist: ["external"]
+      },
+      structuredClone(defaultCatalogue)
+    );
+
+    expect(result.resolvedModel).toBe("gpt-4.1-mini");
+    expect(result.via).toBe("external");
+  });
+
   it("estimates model cost from prompt and completion tokens", () => {
     const estimate = estimateCost(baseRequest, defaultCatalogue["llama-3.1-8b"]);
 

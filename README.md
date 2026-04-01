@@ -177,6 +177,25 @@ Configure any of these variables on the gateway worker to enable it:
 - `AI_GATEWAY_SKIP_CACHE=true`
 - `AI_GATEWAY_CACHE_TTL=120`
 
+## External Provider Fallback
+
+Phase 3 adds an OpenAI-compatible external provider fallback path. See [phase-3-routing-fallback.md](/Users/ethan/Dev/LLM-Inference-Platform/docs/phase-3-routing-fallback.md).
+
+Relevant gateway variables:
+
+- `EXTERNAL_PROVIDER_ENABLED=true`
+- `EXTERNAL_PROVIDER_BASE_URL`
+- `EXTERNAL_PROVIDER_API_KEY`
+- `EXTERNAL_PROVIDER_PATH`
+- `EXTERNAL_PROVIDER_MODEL_PREFIX`
+- `EXTERNAL_PROVIDER_MAX_RETRIES`
+- `EXTERNAL_PROVIDER_RETRY_BASE_MS`
+- `EXTERNAL_PROVIDER_TIMEOUT_MS`
+- `EXTERNAL_PROVIDER_CIRCUIT_FAILURE_THRESHOLD`
+- `EXTERNAL_PROVIDER_CIRCUIT_COOLDOWN_SECONDS`
+
+The external adapter expects an OpenAI-style `chat/completions` endpoint and supports both JSON and SSE responses.
+
 ## Auth Configuration
 
 Phase 2 auth supports both shared-secret and JWKS verification. See [phase-2-auth-rate-limit.md](/Users/ethan/Dev/LLM-Inference-Platform/docs/phase-2-auth-rate-limit.md).
@@ -216,5 +235,4 @@ GitHub configuration expected by the workflow:
 
 ## Remaining Gaps
 
-- External-provider fallback.
 - Production observability dashboards and alerts.

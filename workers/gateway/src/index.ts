@@ -19,7 +19,7 @@ import {
   requireAdminClaims,
   type AuthConfig
 } from "./auth";
-import { buildAiRunOptions, createMockAiResponse } from "./provider";
+import { buildProviderAllowlist, runInference } from "./provider";
 import {
   normalizeIterableAiStream,
   normalizeReadableAiStream
@@ -42,6 +42,16 @@ export interface Env {
   AI_GATEWAY_ID?: string;
   AI_GATEWAY_SKIP_CACHE?: string;
   AI_GATEWAY_CACHE_TTL?: string;
+  EXTERNAL_PROVIDER_ENABLED?: string;
+  EXTERNAL_PROVIDER_BASE_URL?: string;
+  EXTERNAL_PROVIDER_API_KEY?: string;
+  EXTERNAL_PROVIDER_PATH?: string;
+  EXTERNAL_PROVIDER_MODEL_PREFIX?: string;
+  EXTERNAL_PROVIDER_MAX_RETRIES?: string;
+  EXTERNAL_PROVIDER_RETRY_BASE_MS?: string;
+  EXTERNAL_PROVIDER_TIMEOUT_MS?: string;
+  EXTERNAL_PROVIDER_CIRCUIT_FAILURE_THRESHOLD?: string;
+  EXTERNAL_PROVIDER_CIRCUIT_COOLDOWN_SECONDS?: string;
   RATE_LIMIT_REQUESTS_PER_MINUTE?: string;
   RATE_LIMIT_RESERVATION_TTL_SECONDS?: string;
   BILLING_LEDGER_LIMIT?: string;
@@ -134,7 +144,7 @@ export default {
         requestedModel: payload.model,
         promptTokensEstimate,
         maxOutputTokens: payload.maxTokens ?? 512,
-        providerAllowlist: ["workers-ai"]
+        providerAllowlist: buildProviderAllowlist(env)
       });
 
       const rateLimit = await checkRateLimit(env, {
@@ -175,29 +185,15 @@ export default {
         })
       );
 
-      if (routing.via !== "workers-ai") {
-        return withCors(
-          json(
-            {
-              requestId,
-              status: "error",
-              message: "external provider fallback is not enabled in this slice"
-            },
-            { status: 501 }
-          ),
-          requestId
-        );
-      }
-
       const streamEnabled = payload.stream ?? true;
-      const aiRunOptions = buildAiRunOptions(env);
-      const upstream = env.AI
-        ? await env.AI.run(routing.cfModelId as keyof AiModels, {
-            messages,
-            stream: streamEnabled,
-            max_tokens: payload.maxTokens ?? 512
-          }, aiRunOptions)
-        : createMockAiResponse(messages, streamEnabled, requestId, routing);
+      const upstream = await runInference(
+        env,
+        routing,
+        messages,
+        streamEnabled,
+        payload.maxTokens ?? 512,
+        requestId
+      );
 
       if (streamEnabled) {
         if (upstream instanceof ReadableStream) {
@@ -218,7 +214,7 @@ export default {
               {
                 requestId,
                 status: "error",
-                message: "Workers AI returned an unsupported streaming response"
+              message: "provider returned an unsupported streaming response"
               },
               { status: 502 }
             ),

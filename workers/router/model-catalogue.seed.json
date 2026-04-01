@@ -18,6 +18,18 @@
     "outputCostPerMtok": 4.5,
     "maxContextTokens": 128000,
     "enabled": true,
-    "tier": "premium"
+    "tier": "premium",
+    "fallbackTo": "gpt-4.1-mini"
+  },
+  "gpt-4.1-mini": {
+    "id": "gpt-4.1-mini",
+    "provider": "external",
+    "cfModelId": "gpt-4.1-mini",
+    "inputCostPerMtok": 0.4,
+    "outputCostPerMtok": 1.6,
+    "maxContextTokens": 128000,
+    "enabled": true,
+    "tier": "balanced",
+    "fallbackTo": "llama-3.1-8b"
   }
 }

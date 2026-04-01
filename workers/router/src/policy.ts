@@ -27,7 +27,19 @@ export const defaultCatalogue: Record<string, ModelCatalogueEntry> = {
     outputCostPerMtok: 4.5,
     maxContextTokens: 128_000,
     enabled: true,
-    tier: "premium"
+    tier: "premium",
+    fallbackTo: "gpt-4.1-mini"
+  },
+  "gpt-4.1-mini": {
+    id: "gpt-4.1-mini",
+    provider: "external",
+    cfModelId: "gpt-4.1-mini",
+    inputCostPerMtok: 0.4,
+    outputCostPerMtok: 1.6,
+    maxContextTokens: 128_000,
+    enabled: true,
+    tier: "balanced",
+    fallbackTo: "llama-3.1-8b"
   }
 };
 
@@ -36,7 +48,14 @@ export function resolveRoute(
   catalogue: Record<string, ModelCatalogueEntry>
 ): RouterResponse {
   const requestedModel = request.requestedModel ?? DEFAULT_MODEL_ID;
-  const model = catalogue[requestedModel] ?? catalogue[DEFAULT_MODEL_ID];
+  const providerAllowlist = request.providerAllowlist?.length
+    ? new Set(request.providerAllowlist)
+    : undefined;
+  const model = selectRoutableModel(
+    requestedModel,
+    catalogue,
+    providerAllowlist
+  ) ?? selectRoutableModel(DEFAULT_MODEL_ID, defaultCatalogue, providerAllowlist);
 
   if (!model || !model.enabled) {
     return {
@@ -50,7 +69,9 @@ export function resolveRoute(
   }
 
   if (request.userTier === "free" && model.tier !== "fast") {
-    const fallback = catalogue[DEFAULT_MODEL_ID] ?? defaultCatalogue[DEFAULT_MODEL_ID];
+    const fallback = selectRoutableModel(DEFAULT_MODEL_ID, catalogue, providerAllowlist)
+      ?? selectRoutableModel(DEFAULT_MODEL_ID, defaultCatalogue, providerAllowlist)
+      ?? defaultCatalogue[DEFAULT_MODEL_ID];
     return {
       resolvedModel: fallback.id,
       cfModelId: fallback.cfModelId,
@@ -63,7 +84,7 @@ export function resolveRoute(
 
   const estimatedCost = estimateCost(request, model);
   if (estimatedCost > request.budgetRemainingCents && model.fallbackTo) {
-    const fallback = catalogue[model.fallbackTo];
+    const fallback = selectRoutableModel(model.fallbackTo, catalogue, providerAllowlist);
     if (fallback?.enabled) {
       return {
         resolvedModel: fallback.id,
@@ -84,6 +105,33 @@ export function resolveRoute(
     reason: model.id === requestedModel ? "requested-model" : "catalogue-default",
     policyVersion: POLICY_VERSION
   };
+}
+
+function selectRoutableModel(
+  modelId: string,
+  catalogue: Record<string, ModelCatalogueEntry>,
+  providerAllowlist?: Set<"workers-ai" | "external">
+): ModelCatalogueEntry | undefined {
+  const visited = new Set<string>();
+  let currentId: string | undefined = modelId;
+
+  while (currentId && !visited.has(currentId)) {
+    visited.add(currentId);
+    const model: ModelCatalogueEntry | undefined = catalogue[currentId];
+    if (!model) {
+      return undefined;
+    }
+    if (!model.enabled) {
+      currentId = model.fallbackTo;
+      continue;
+    }
+    if (!providerAllowlist || providerAllowlist.has(model.provider)) {
+      return model;
+    }
+    currentId = model.fallbackTo;
+  }
+
+  return undefined;
 }
 
 export function estimateCost(request: RouterRequest, model: ModelCatalogueEntry): number {
