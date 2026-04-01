@@ -80,6 +80,8 @@ describe("observability telemetry helpers", () => {
     expect(query).toContain("FROM llm_requests");
     expect(query).toContain("INTERVAL '24' HOUR");
     expect(query).toContain("blob1 = 'tenant-1'");
+    expect(query).not.toContain("NULLIF");
+    expect(query).toContain("CASE");
   });
 
   it("builds a model breakdown query", () => {
