@@ -131,10 +131,6 @@ export async function runInference(
       };
     }
 
-    if (env.AI_GATEWAY_ID && env.AI_GATEWAY_ACCOUNT_ID && env.AI_GATEWAY_TOKEN) {
-      return runAiGatewayInference(env, routing, messages, stream, maxTokens, payload, promptEntry);
-    }
-
     return {
       upstream: await env.AI.run(
         routing.cfModelId as keyof AiModels,
@@ -181,50 +177,6 @@ export function createMockAiResponse(
         finishReason: "stop",
         done: true
       };
-    }
-  };
-}
-
-async function runAiGatewayInference(
-  env: ProviderEnv,
-  routing: RouterResponse,
-  messages: ChatMessage[],
-  stream: boolean,
-  maxTokens: number,
-  payload?: GatewayRequest,
-  promptEntry?: PromptRegistryEntry
-): Promise<InferenceResult> {
-  const policy = buildCachePolicy(env, payload, promptEntry);
-  const response = await fetch(
-    `https://gateway.ai.cloudflare.com/v1/${env.AI_GATEWAY_ACCOUNT_ID}/${env.AI_GATEWAY_ID}/workers-ai/${routing.cfModelId}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "cf-aig-authorization": `Bearer ${env.AI_GATEWAY_TOKEN}`,
-        ...(policy.bypass ? { "cf-aig-skip-cache": "true" } : {}),
-        ...(!policy.bypass && policy.ttlSeconds
-          ? { "cf-aig-cache-ttl": String(policy.ttlSeconds) }
-          : {})
-      },
-      body: JSON.stringify({
-        messages,
-        stream,
-        max_tokens: maxTokens
-      })
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`AI Gateway request failed with status ${response.status}`);
-  }
-
-  return {
-    upstream: stream ? response.body ?? undefined : await response.json(),
-    responseHeaders: toGatewayDebugHeaders(response.headers, policy),
-    meta: {
-      ...buildMeta(promptEntry),
-      cacheStatus: response.headers.get("cf-aig-cache-status") ?? undefined
     }
   };
 }
@@ -509,19 +461,6 @@ function withModelPrefix(model: string, prefix: string | undefined): string {
     return model;
   }
   return `${prefix}${model}`;
-}
-
-function toGatewayDebugHeaders(headers: Headers, policy: { bypass: boolean; ttlSeconds?: number }): Headers {
-  const output = new Headers();
-  const cacheStatus = headers.get("cf-aig-cache-status");
-  if (cacheStatus) {
-    output.set("cf-aig-cache-status", cacheStatus);
-  }
-  output.set("x-cache-bypass", String(policy.bypass));
-  if (policy.ttlSeconds) {
-    output.set("x-cache-ttl-seconds", String(policy.ttlSeconds));
-  }
-  return output;
 }
 
 function buildMeta(promptEntry?: PromptRegistryEntry): InferenceResult["meta"] {

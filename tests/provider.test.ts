@@ -175,25 +175,14 @@ describe("gateway provider helpers", () => {
     });
   });
 
-  it("returns AI Gateway cache headers when configured", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        new Response(
-          JSON.stringify({ response: "hello from gateway" }),
-          {
-            status: 200,
-            headers: {
-              "cf-aig-cache-status": "HIT"
-            }
-          }
-        )
-      )
-    );
+  it("routes Workers AI calls through binding-based AI Gateway options when configured", async () => {
+    const runMock = vi.fn(async () => ({ response: "hello from gateway" }));
 
     const response = await runInference(
       {
-        AI: {} as Ai,
+        AI: {
+          run: runMock
+        } as unknown as Ai,
         AI_GATEWAY_ID: "gateway-1",
         AI_GATEWAY_ACCOUNT_ID: "acct",
         AI_GATEWAY_TOKEN: "token"
@@ -218,9 +207,21 @@ describe("gateway provider helpers", () => {
       }
     );
 
-    expect(new Headers(response.responseHeaders).get("cf-aig-cache-status")).toBe("HIT");
+    expect(runMock).toHaveBeenCalledWith(
+      "@cf/meta/llama-3.1-8b-instruct",
+      expect.objectContaining({
+        messages: [{ role: "user", content: "hello" }],
+        stream: false,
+        max_tokens: 128
+      }),
+      {
+        gateway: {
+          id: "gateway-1",
+          cacheTtl: 30
+        }
+      }
+    );
     expect(response.meta).toMatchObject({
-      cacheStatus: "HIT",
       promptId: "concise-assistant",
       promptVersion: "v1"
     });
