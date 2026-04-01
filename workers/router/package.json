@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc --project tsconfig.json",
     "dev": "wrangler dev",
+    "dev:ci": "wrangler dev --port 8789 --inspector-port 9231",
     "deploy": "wrangler deploy"
   },
   "dependencies": {

@@ -1,0 +1,23 @@
+{
+  "llama-3.1-8b": {
+    "id": "llama-3.1-8b",
+    "provider": "workers-ai",
+    "cfModelId": "@cf/meta/llama-3.1-8b-instruct",
+    "inputCostPerMtok": 0.2,
+    "outputCostPerMtok": 0.8,
+    "maxContextTokens": 128000,
+    "enabled": true,
+    "tier": "fast",
+    "fallbackTo": "llama-3.1-70b"
+  },
+  "llama-3.1-70b": {
+    "id": "llama-3.1-70b",
+    "provider": "workers-ai",
+    "cfModelId": "@cf/meta/llama-3.1-70b-instruct",
+    "inputCostPerMtok": 1.5,
+    "outputCostPerMtok": 4.5,
+    "maxContextTokens": 128000,
+    "enabled": true,
+    "tier": "premium"
+  }
+}

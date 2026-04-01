@@ -15,6 +15,7 @@ import {
   estimatePromptTokens,
   estimateTextTokens
 } from "./auth";
+import { buildAiRunOptions, createMockAiResponse } from "./provider";
 import {
   normalizeIterableAiStream,
   normalizeReadableAiStream
@@ -27,6 +28,9 @@ export interface Env {
   OBSERVABILITY: Fetcher;
   RATE_LIMITER: DurableObjectNamespace;
   JWT_SECRET?: string;
+  AI_GATEWAY_ID?: string;
+  AI_GATEWAY_SKIP_CACHE?: string;
+  AI_GATEWAY_CACHE_TTL?: string;
 }
 
 type AiStreamChunk =
@@ -155,13 +159,14 @@ export default {
       }
 
       const streamEnabled = payload.stream ?? true;
+      const aiRunOptions = buildAiRunOptions(env);
       const upstream = env.AI
         ? await env.AI.run(routing.cfModelId as keyof AiModels, {
             messages,
             stream: streamEnabled,
             max_tokens: payload.maxTokens ?? 512
-          })
-        : createMockAiResponse(messages, streamEnabled);
+          }, aiRunOptions)
+        : createMockAiResponse(messages, streamEnabled, requestId, routing);
 
       if (streamEnabled) {
         if (upstream instanceof ReadableStream) {
@@ -457,35 +462,6 @@ function isAsyncIterable(
   value: unknown
 ): value is AsyncIterable<string | { response?: string | null; done?: boolean; error?: string; usage?: Record<string, unknown> }> {
   return Boolean(value) && typeof (value as AsyncIterable<unknown>)[Symbol.asyncIterator] === "function";
-}
-
-function createMockAiResponse(
-  messages: Array<{ content: string }>,
-  streamEnabled: boolean
-): AsyncIterable<AiStreamChunk> | { response: string } {
-  const lastMessage = messages.at(-1)?.content ?? "No prompt provided.";
-  const mockText = `Local gateway dev mode: Workers AI binding is unavailable, so this is a mock response to "${lastMessage}".`;
-
-  if (!streamEnabled) {
-    return { response: mockText };
-  }
-
-  return {
-    async *[Symbol.asyncIterator]() {
-      yield { response: mockText, done: true };
-    }
-  };
-}
-
-function sseHeaders(requestId: string, routing: RouterResponse): HeadersInit {
-  return {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
-    "X-Request-Id": requestId,
-    "X-Resolved-Model": routing.resolvedModel,
-    ...corsHeaders
-  };
 }
 
 function withCors(response: Response, requestId?: string): Response {

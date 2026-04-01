@@ -28,3 +28,6 @@ jobs:
 
       - name: Build workspaces
         run: npm run build
+
+      - name: Run local smoke suite
+        run: npm run ci:smoke

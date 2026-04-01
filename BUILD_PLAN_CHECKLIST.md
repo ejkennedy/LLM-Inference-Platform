@@ -10,18 +10,22 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 
 ## Phase 1: Foundations & First Inference
 
+- `[x]` Repo-owned Phase 1 implementation is complete
+- `[-]` Cloudflare account-specific bindings, IDs, and environment values still need to be set in the target account
+
 ### Decision record + acceptance criteria
 - `[x]` Thin vertical slice exists: gateway, router, observability, shared types
 - `[x]` Shared contracts are defined and used across worker boundaries
 - `[x]` Health endpoints exist for workers
-- `[-]` Explicit written acceptance criteria document is not separated as its own ADR/checklist artifact
-- `[ ]` Formal MVP scope document or ADR set
+- `[x]` Explicit written acceptance criteria document exists in `docs/phase-1-mvp.md`
+- `[x]` Formal MVP scope document exists for the thin Phase 1 slice
 
 ### Repo + Wrangler setup
 - `[x]` Monorepo structure exists for `gateway`, `router`, `observability`, and `shared/types`
 - `[x]` Local dev scripts exist in the root `package.json`
 - `[x]` Wrangler configs exist for all workers
 - `[x]` Staging and production environment blocks exist in Wrangler configs
+- `[x]` CI now runs install, test, build, and a local smoke gate for the Phase 1 slice
 - `[-]` Some Cloudflare resources still rely on later manual configuration in real environments
 
 ### First Workers AI inference call
@@ -34,13 +38,15 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 ### Model catalogue in KV
 - `[x]` Router supports a model catalogue abstraction
 - `[x]` Safe in-code default catalogue exists
-- `[-]` KV-backed catalogue loading exists, but no real KV namespace ID/data bootstrap is committed
-- `[ ]` Real Cloudflare KV namespace provisioning and seeded model records
+- `[x]` KV-backed catalogue loading exists
+- `[x]` Seed model catalogue data is committed in `workers/router/model-catalogue.seed.json`
+- `[x]` Seed/bootstrap script exists for staging and production KV population
+- `[-]` Real Cloudflare KV namespace creation and binding IDs still require account-specific setup
 
 ### Cloudflare AI Gateway integration
-- `[ ]` AI Gateway is not integrated
-- `[ ]` Semantic caching is not integrated
-- `[ ]` AI Gateway logging/caching controls are not configured
+- `[x]` Optional AI Gateway integration exists in the gateway worker
+- `[-]` Basic cache controls exist through `AI_GATEWAY_SKIP_CACHE` and `AI_GATEWAY_CACHE_TTL`, but no tuned semantic cache policy is committed
+- `[x]` AI Gateway cache-control wiring is configurable in code and docs
 
 ## Phase 2: Authentication & Rate Limiting
 

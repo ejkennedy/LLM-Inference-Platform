@@ -127,9 +127,45 @@ npm run smoke:local
 
 This checks `/health`, `/v1/usage`, and `/v1/chat` against a running local gateway and validates the normalized SSE contract.
 
+CI also runs:
+
+```bash
+npm run ci:smoke
+```
+
+That command boots the three workers locally on fixed ports and verifies the thin Phase 1 slice end to end.
+
+## Router Catalogue Bootstrap
+
+Seed data for the router catalogue lives in [model-catalogue.seed.json](/Users/ethan/Dev/LLM-Inference-Platform/workers/router/model-catalogue.seed.json).
+
+To seed a real Cloudflare KV namespace once you have created it:
+
+```bash
+MODEL_CATALOGUE_NAMESPACE_ID=<namespace-id> npm run seed:catalogue -- staging
+```
+
+Or:
+
+```bash
+MODEL_CATALOGUE_NAMESPACE_ID=<namespace-id> npm run seed:catalogue -- production
+```
+
+This uses your existing `CLOUDFLARE_API_TOKEN` or `CF_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` or `CF_ACCOUNT_ID`.
+
+## AI Gateway
+
+The gateway supports optional Cloudflare AI Gateway routing while keeping direct Workers AI as the default path.
+
+Configure any of these variables on the gateway worker to enable it:
+
+- `AI_GATEWAY_ID`
+- `AI_GATEWAY_SKIP_CACHE=true`
+- `AI_GATEWAY_CACHE_TTL=120`
+
 ## CI
 
-The repo includes [ci.yml](/Users/ethan/Dev/LLM-Inference-Platform/.github/workflows/ci.yml) to run `npm ci`, `npm test`, and `npm run build` on pushes and pull requests.
+The repo includes [ci.yml](/Users/ethan/Dev/LLM-Inference-Platform/.github/workflows/ci.yml) to run `npm ci`, `npm test`, `npm run build`, and the local smoke suite on pushes and pull requests.
 
 ## CD
 
@@ -148,6 +184,6 @@ GitHub configuration expected by the workflow:
 
 ## Remaining Gaps
 
-- AI Gateway integration and external-provider fallback.
+- External-provider fallback.
 - Stronger JWT key management such as JWKS-based verification.
-- CI smoke tests and deploy workflows.
+- Production observability dashboards and alerts.
