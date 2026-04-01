@@ -1,4 +1,6 @@
 import type {
+  AdminUsageResponse,
+  BillingLedgerEntry,
   BudgetState,
   GatewayRequest,
   HealthResponse,
@@ -13,7 +15,9 @@ import type {
 import {
   authenticateRequest,
   estimatePromptTokens,
-  estimateTextTokens
+  estimateTextTokens,
+  requireAdminClaims,
+  type AuthConfig
 } from "./auth";
 import { buildAiRunOptions, createMockAiResponse } from "./provider";
 import {
@@ -28,9 +32,19 @@ export interface Env {
   OBSERVABILITY: Fetcher;
   RATE_LIMITER: DurableObjectNamespace;
   JWT_SECRET?: string;
+  JWT_SECRET_PREVIOUS?: string;
+  JWT_SECRET_NEXT?: string;
+  JWT_JWKS_URL?: string;
+  JWT_ISSUER?: string;
+  JWT_AUDIENCE?: string;
+  JWT_CLOCK_SKEW_SECONDS?: string;
+  JWT_JWKS_CACHE_TTL_SECONDS?: string;
   AI_GATEWAY_ID?: string;
   AI_GATEWAY_SKIP_CACHE?: string;
   AI_GATEWAY_CACHE_TTL?: string;
+  RATE_LIMIT_REQUESTS_PER_MINUTE?: string;
+  RATE_LIMIT_RESERVATION_TTL_SECONDS?: string;
+  BILLING_LEDGER_LIMIT?: string;
 }
 
 type AiStreamChunk =
@@ -68,8 +82,23 @@ export default {
       }
 
       if (request.method === "GET" && url.pathname === "/v1/usage") {
-        const claims = await authenticateRequest(request, env.JWT_SECRET);
+        const claims = await authenticateRequest(request, authConfig(env));
         const usage = await getUsageSummary(env, claims.sub);
+        return withCors(json(usage));
+      }
+
+      if (request.method === "GET" && url.pathname === "/v1/admin/usage") {
+        const claims = await authenticateRequest(request, authConfig(env));
+        requireAdminClaims(claims);
+        const userId = url.searchParams.get("userId");
+        if (!userId) {
+          return withCors(json({ status: "error", message: "userId is required" }, { status: 400 }));
+        }
+        const limit = parsePositiveInt(
+          url.searchParams.get("limit"),
+          parsePositiveInt(env.BILLING_LEDGER_LIMIT, 20)
+        );
+        const usage = await getAdminUsageSummary(env, userId, limit);
         return withCors(json(usage));
       }
 
@@ -77,7 +106,7 @@ export default {
         return withCors(new Response("Not Found", { status: 404 }));
       }
 
-      const claims = await authenticateRequest(request, env.JWT_SECRET);
+      const claims = await authenticateRequest(request, authConfig(env));
       const currentUsage = await getUsageSummary(env, claims.sub);
       const payload = (await request.json()) as GatewayRequest;
       const requestId = payload.requestId ?? request.headers.get("X-Request-Id") ?? crypto.randomUUID();
@@ -112,7 +141,9 @@ export default {
         requestId,
         userId: claims.sub,
         budgetLimitCents: claims.budgetLimitCents,
-        estimatedCostCents: routing.expectedCostCents
+        estimatedCostCents: routing.expectedCostCents,
+        requestLimitPerMinute: parsePositiveInt(env.RATE_LIMIT_REQUESTS_PER_MINUTE, 60),
+        reservationTtlSeconds: parsePositiveInt(env.RATE_LIMIT_RESERVATION_TTL_SECONDS, 900)
       });
 
       if (!rateLimit.allow) {
@@ -265,13 +296,21 @@ export class RateLimiter {
       return json(await this.readUsageSummary());
     }
 
+    if (request.method === "GET" && url.pathname === "/admin/usage") {
+      const limit = parsePositiveInt(url.searchParams.get("limit"), 20);
+      return json(await this.readAdminUsage(limit));
+    }
+
     return new Response("Not Found", { status: 404 });
   }
 
   private async handleCheck(payload: RateLimitCheckRequest): Promise<Response> {
+    await this.cleanupState(payload.reservationTtlSeconds);
+
     const now = Date.now();
     const minuteBucket = Math.floor(now / 60_000);
     const requestKey = `rpm:${minuteBucket}`;
+    const limit = payload.requestLimitPerMinute ?? 60;
     const budgetState = (await this.state.storage.get<BudgetState>("budget")) ?? {
       budgetLimitCents: payload.budgetLimitCents,
       estimatedSpendCents: 0,
@@ -286,22 +325,34 @@ export class RateLimiter {
       (payload.budgetLimitCents - nextEstimatedSpend).toFixed(4)
     );
 
-    const allow = count <= 60 && nextRemainingBudget >= 0;
+    const allow = count <= limit && nextRemainingBudget >= 0;
     if (allow) {
+      await this.state.storage.put("userId", payload.userId);
       await this.state.storage.put(requestKey, count);
       await this.state.storage.put("budget", {
         budgetLimitCents: payload.budgetLimitCents,
         estimatedSpendCents: nextEstimatedSpend,
         remainingBudgetCents: nextRemainingBudget
       } satisfies BudgetState);
-      await this.state.storage.put(`request:${payload.requestId}`, payload.estimatedCostCents);
+      await this.state.storage.put(`request:${payload.requestId}`, {
+        estimatedCostCents: payload.estimatedCostCents,
+        createdAt: now
+      });
+      await this.appendLedgerEntry({
+        type: "reservation",
+        requestId: payload.requestId,
+        ts: new Date(now).toISOString(),
+        estimatedCostCents: payload.estimatedCostCents,
+        deltaCostCents: payload.estimatedCostCents,
+        remainingBudgetCents: nextRemainingBudget
+      });
     }
 
     return json<RateLimitCheckResponse>({
       allow,
-      reason: allow ? "allowed" : count > 60 ? "rate_limit" : "budget",
-      remaining: allow ? Math.max(60 - count, 0) : Math.max(nextRemainingBudget, 0),
-      retryAfterSeconds: count > 60 ? 60 - Math.floor((now % 60_000) / 1_000) : undefined,
+      reason: allow ? "allowed" : count > limit ? "rate_limit" : "budget",
+      remaining: allow ? Math.max(limit - count, 0) : Math.max(nextRemainingBudget, 0),
+      retryAfterSeconds: count > limit ? 60 - Math.floor((now % 60_000) / 1_000) : undefined,
       window: {
         type: "minute",
         bucket: minuteBucket
@@ -310,30 +361,47 @@ export class RateLimiter {
   }
 
   private async handleSpend(payload: SpendRequest): Promise<Response> {
+    await this.cleanupState();
+
     const budgetState = (await this.state.storage.get<BudgetState>("budget")) ?? {
       budgetLimitCents: 0,
       estimatedSpendCents: 0,
       remainingBudgetCents: 0
     };
-    const reserved = (await this.state.storage.get<number>(`request:${payload.requestId}`)) ?? payload.estimatedCostCents;
+    const reservation =
+      (await this.state.storage.get<{ estimatedCostCents: number; createdAt: number }>(
+        `request:${payload.requestId}`
+      )) ?? undefined;
+    const reserved = reservation?.estimatedCostCents ?? payload.estimatedCostCents;
     const actual = payload.actualCostCents ?? payload.estimatedCostCents;
     const adjustedSpend = Number(
       Math.max(budgetState.estimatedSpendCents - reserved + actual, 0).toFixed(4)
+    );
+    const remainingBudgetCents = Number(
+      Math.max(budgetState.budgetLimitCents - adjustedSpend, 0).toFixed(4)
     );
 
     await this.state.storage.put("budget", {
       budgetLimitCents: budgetState.budgetLimitCents,
       estimatedSpendCents: adjustedSpend,
-      remainingBudgetCents: Number(
-        Math.max(budgetState.budgetLimitCents - adjustedSpend, 0).toFixed(4)
-      )
+      remainingBudgetCents
     } satisfies BudgetState);
     await this.state.storage.delete(`request:${payload.requestId}`);
+    await this.appendLedgerEntry({
+      type: "reconciliation",
+      requestId: payload.requestId,
+      ts: new Date().toISOString(),
+      estimatedCostCents: reserved,
+      actualCostCents: actual,
+      deltaCostCents: Number((actual - reserved).toFixed(4)),
+      remainingBudgetCents
+    });
 
     return json(await this.readUsageSummary());
   }
 
   private async readUsageSummary(): Promise<UsageSummary> {
+    await this.cleanupState();
     const minuteBucket = Math.floor(Date.now() / 60_000);
     const requestCountCurrentMinute =
       (await this.state.storage.get<number>(`rpm:${minuteBucket}`)) ?? 0;
@@ -348,6 +416,86 @@ export class RateLimiter {
       requestCountCurrentMinute,
       currentMinuteBucket: minuteBucket
     };
+  }
+
+  private async readAdminUsage(limit: number): Promise<AdminUsageResponse> {
+    const summary = await this.readUsageSummary();
+    const recentLedger = await this.readRecentLedger(limit);
+    const activeReservations = (await this.state.storage.list({ prefix: "request:" })).size;
+    const userId = (await this.state.storage.get<string>("userId")) ?? "unknown";
+
+    return {
+      userId,
+      ...summary,
+      activeReservations,
+      recentLedger
+    };
+  }
+
+  private async cleanupState(reservationTtlSeconds = 900): Promise<void> {
+    const now = Date.now();
+    const reservationCutoff = now - reservationTtlSeconds * 1000;
+    const requests = await this.state.storage.list<{ estimatedCostCents: number; createdAt: number }>({
+      prefix: "request:"
+    });
+    const budgetState = (await this.state.storage.get<BudgetState>("budget")) ?? {
+      budgetLimitCents: 0,
+      estimatedSpendCents: 0,
+      remainingBudgetCents: 0
+    };
+
+    let spendReduction = 0;
+    for (const [key, reservation] of requests) {
+      if (reservation.createdAt >= reservationCutoff) {
+        continue;
+      }
+      spendReduction += reservation.estimatedCostCents;
+      await this.state.storage.delete(key);
+      await this.appendLedgerEntry({
+        type: "release",
+        requestId: key.slice("request:".length),
+        ts: new Date(now).toISOString(),
+        estimatedCostCents: reservation.estimatedCostCents,
+        deltaCostCents: Number((-reservation.estimatedCostCents).toFixed(4)),
+        remainingBudgetCents: Number(
+          Math.max(
+            budgetState.budgetLimitCents - Math.max(budgetState.estimatedSpendCents - spendReduction, 0),
+            0
+          ).toFixed(4)
+        )
+      });
+    }
+
+    if (spendReduction > 0) {
+      const adjustedSpend = Number(Math.max(budgetState.estimatedSpendCents - spendReduction, 0).toFixed(4));
+      await this.state.storage.put("budget", {
+        budgetLimitCents: budgetState.budgetLimitCents,
+        estimatedSpendCents: adjustedSpend,
+        remainingBudgetCents: Number(
+          Math.max(budgetState.budgetLimitCents - adjustedSpend, 0).toFixed(4)
+        )
+      } satisfies BudgetState);
+    }
+
+    const currentMinuteBucket = Math.floor(now / 60_000);
+    const buckets = await this.state.storage.list<number>({ prefix: "rpm:" });
+    for (const [key] of buckets) {
+      const bucket = Number(key.slice("rpm:".length));
+      if (Number.isFinite(bucket) && bucket < currentMinuteBucket - 5) {
+        await this.state.storage.delete(key);
+      }
+    }
+  }
+
+  private async appendLedgerEntry(entry: BillingLedgerEntry): Promise<void> {
+    const ledger = await this.readRecentLedger(199);
+    ledger.unshift(entry);
+    await this.state.storage.put("ledger", ledger.slice(0, 200));
+  }
+
+  private async readRecentLedger(limit: number): Promise<BillingLedgerEntry[]> {
+    const ledger = (await this.state.storage.get<BillingLedgerEntry[]>("ledger")) ?? [];
+    return ledger.slice(0, Math.max(limit, 0));
   }
 }
 
@@ -413,6 +561,23 @@ async function getUsageSummary(env: Env, userId: string): Promise<UsageSummary> 
   }
 
   return (await response.json()) as UsageSummary;
+}
+
+async function getAdminUsageSummary(
+  env: Env,
+  userId: string,
+  limit: number
+): Promise<AdminUsageResponse> {
+  const id = env.RATE_LIMITER.idFromName(userId);
+  const response = await env.RATE_LIMITER
+    .get(id)
+    .fetch(`https://rate-limiter.internal/admin/usage?limit=${limit}`);
+
+  if (!response.ok) {
+    throw new Error(`Rate limiter admin usage lookup failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as AdminUsageResponse;
 }
 
 async function publishObservation(env: Env, event: ObservabilityEvent): Promise<void> {
@@ -492,4 +657,25 @@ function json<T>(value: T, init?: ResponseInit): Response {
 
 function errorResponse(message: string, status: number): Response {
   return json({ status: "error", message }, { status });
+}
+
+function authConfig(env: Env): AuthConfig {
+  return {
+    jwtSecret: env.JWT_SECRET,
+    jwtSecretPrevious: env.JWT_SECRET_PREVIOUS,
+    jwtSecretNext: env.JWT_SECRET_NEXT,
+    jwtJwksUrl: env.JWT_JWKS_URL,
+    jwtIssuer: env.JWT_ISSUER,
+    jwtAudience: env.JWT_AUDIENCE,
+    jwtClockSkewSeconds: env.JWT_CLOCK_SKEW_SECONDS,
+    jwtJwksCacheTtlSeconds: env.JWT_JWKS_CACHE_TTL_SECONDS
+  };
+}
+
+function parsePositiveInt(value: string | null | undefined, fallback: number): number {
+  if (!value) {
+    return fallback;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }

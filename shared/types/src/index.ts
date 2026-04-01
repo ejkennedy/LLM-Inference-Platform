@@ -11,7 +11,12 @@ export type AuthClaims = {
   sub: string;
   tier: UserTier;
   budgetLimitCents: number;
-  tenantId?: string;
+  tenantId: string;
+  role?: 'user' | 'admin';
+  scopes?: string[];
+  iss?: string;
+  aud?: string | string[];
+  jti?: string;
   iat?: number;
   exp?: number;
   nbf?: number;
@@ -59,6 +64,22 @@ export type UsageSummary = BudgetState & {
   currentMinuteBucket: number;
 };
 
+export type BillingLedgerEntry = {
+  type: 'reservation' | 'reconciliation' | 'release';
+  requestId: string;
+  ts: string;
+  estimatedCostCents: number;
+  actualCostCents?: number;
+  deltaCostCents: number;
+  remainingBudgetCents: number;
+};
+
+export type AdminUsageResponse = UsageSummary & {
+  userId: string;
+  activeReservations: number;
+  recentLedger: BillingLedgerEntry[];
+};
+
 export type RouterRequest = {
   requestId?: string;
   userTier: UserTier;
@@ -104,6 +125,8 @@ export type RateLimitCheckRequest = {
   userId: string;
   budgetLimitCents: number;
   estimatedCostCents: number;
+  requestLimitPerMinute?: number;
+  reservationTtlSeconds?: number;
 };
 
 export type SpendRequest = {

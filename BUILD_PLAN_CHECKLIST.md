@@ -50,30 +50,31 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 
 ## Phase 2: Authentication & Rate Limiting
 
+- `[x]` Repo-owned Phase 2 implementation is complete
+- `[-]` Production rollout still requires real issuer, audience, secrets, and optionally JWKS publication in the target identity system
+
 ### JWT auth middleware
 - `[x]` Gateway requires bearer auth for protected endpoints
 - `[x]` HS256 JWT verification exists
 - `[x]` Local auth/dev token setup is documented and scripted
-- `[-]` Auth is production-usable for shared-secret setups, but not ideal for multi-service/public-key production auth
-- `[ ]` JWKS or public-key verification
-- `[ ]` Key rotation strategy in code/config
-- `[ ]` Claim-level validation beyond current basic shape/expiry checks
+- `[x]` JWKS or public-key verification exists
+- `[x]` Key rotation strategy exists in code/config for both HS256 and JWKS rollout
+- `[x]` Claim-level validation covers issuer, audience, tenant, role, scopes, clock skew, and basic required claims
 
 ### Rate limiter with Durable Objects
 - `[x]` Durable Object `RateLimiter` exists
 - `[x]` Per-minute request limiting exists
 - `[x]` Usage state can be queried with `/v1/usage`
 - `[x]` Rate-limit denial returns `429`
-- `[-]` The DO is functional, but not yet tuned/documented for production scaling and lifecycle concerns
+- `[x]` The DO now cleans up expired reservations and old rate buckets and is documented for production lifecycle concerns
 
 ### Budget enforcement
 - `[x]` Budget reservation state exists in the Durable Object
 - `[x]` Spend reconciliation endpoint exists in the Durable Object flow
 - `[x]` Gateway decrements estimated spend on chat requests
 - `[x]` Budget denial returns `402`
-- `[-]` Spend accounting is still estimate-based around current provider flow and not audit-grade billing
-- `[ ]` Strong billing ledger / reconciliation store
-- `[ ]` Admin billing API beyond current usage summary
+- `[x]` A bounded billing ledger / reconciliation store exists inside the Durable Object
+- `[x]` Admin billing API exists beyond the current user usage summary
 
 ## Phase 3: Model Router & Cost-Aware Fallback
 
@@ -140,7 +141,7 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 - `[-]` Real deployment requires repository/environment secrets and Cloudflare resource setup
 
 ### Secret rotation & zero-downtime key updates
-- `[ ]` Not implemented
+- `[-]` JWT rotation support exists in gateway config and docs, but broader platform secret rotation automation is not implemented
 
 ### Load testing & latency benchmarks
 - `[ ]` Not implemented
@@ -159,7 +160,6 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 - `[x]` CD workflow scaffold
 
 ### Highest-priority remaining work
-- `[ ]` Replace HS256 local/shared-secret auth with JWKS or another production key-verification model
 - `[ ]` Configure real Cloudflare resources for KV, Durable Objects, Analytics, service bindings, and environments
 - `[ ]` Add AI Gateway in front of inference
 - `[ ]` Implement external provider fallback path

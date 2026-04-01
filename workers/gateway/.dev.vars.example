@@ -1,1 +1,5 @@
 JWT_SECRET=replace-me-with-a-random-secret
+JWT_SECRET_PREVIOUS=
+JWT_ISSUER=
+JWT_AUDIENCE=
+TENANT_ID=demo-tenant

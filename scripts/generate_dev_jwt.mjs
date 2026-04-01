@@ -2,23 +2,26 @@ import crypto from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const [, , secretOrSubArg, maybeSubArg, maybeTierArg, maybeBudgetArg] = process.argv;
+const args = process.argv.slice(2);
 const repoRoot = resolve(import.meta.dirname, "..");
-const fileSecret = readJwtSecretFromCandidates([
+const vars = readDevVarsFromCandidates([
   resolve(repoRoot, "workers/gateway/.dev.vars"),
   resolve(process.cwd(), "workers/gateway/.dev.vars"),
   resolve(process.cwd(), ".dev.vars")
 ]);
-const explicitSecretProvided = Boolean(maybeBudgetArg);
-const secret = explicitSecretProvided ? secretOrSubArg : fileSecret;
-const subject = explicitSecretProvided ? maybeSubArg : secretOrSubArg ?? "demo-user";
-const tier = explicitSecretProvided ? maybeTierArg : maybeSubArg ?? "standard";
-const budget = explicitSecretProvided ? maybeBudgetArg : maybeTierArg ?? "500";
+const explicitSecretProvided = args.length >= 4;
+const secret = explicitSecretProvided ? args[0] : vars.JWT_SECRET;
+const baseIndex = explicitSecretProvided ? 1 : 0;
+const subject = args[baseIndex] ?? "demo-user";
+const tier = args[baseIndex + 1] ?? "standard";
+const budget = args[baseIndex + 2] ?? "500";
+const role = args[baseIndex + 3] ?? "user";
+const scopes = args[baseIndex + 4] ?? (role === "admin" ? "billing:read" : "chat:write");
 
 if (!secret) {
   console.error("JWT secret not found.");
   console.error("Run: npm run setup:local-auth");
-  console.error("Or pass the secret explicitly: npm run token:dev -- <secret> [sub] [tier] [budget]");
+  console.error("Or pass the secret explicitly: npm run token:dev -- <secret> [sub] [tier] [budget] [role] [scopes]");
   process.exit(1);
 }
 
@@ -31,7 +34,11 @@ const payload = {
   sub: subject,
   tier,
   budgetLimitCents: Number(budget),
-  tenantId: "demo-tenant",
+  tenantId: vars.TENANT_ID ?? "demo-tenant",
+  role,
+  scopes: scopes.split(",").map((value) => value.trim()).filter(Boolean),
+  iss: vars.JWT_ISSUER,
+  aud: vars.JWT_AUDIENCE ? vars.JWT_AUDIENCE.split(",").map((value) => value.trim()) : undefined,
   iat: now,
   exp: now + 60 * 60
 };
@@ -50,20 +57,22 @@ function encodeBase64Url(value) {
   return Buffer.from(value, "utf8").toString("base64url");
 }
 
-function readJwtSecretFromCandidates(paths) {
+function readDevVarsFromCandidates(paths) {
   for (const path of paths) {
     if (!existsSync(path)) {
       continue;
     }
 
-    const line = readFileSync(path, "utf8")
-      .split(/\r?\n/)
-      .find((entry) => entry.startsWith("JWT_SECRET="));
-
-    if (line) {
-      return line.slice("JWT_SECRET=".length);
-    }
+    return Object.fromEntries(
+      readFileSync(path, "utf8")
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .map((entry) => {
+          const separator = entry.indexOf("=");
+          return [entry.slice(0, separator), entry.slice(separator + 1)];
+        })
+    );
   }
 
-  return undefined;
+  return {};
 }

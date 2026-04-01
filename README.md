@@ -81,6 +81,12 @@ Or override the defaults:
 npm run token:dev -- demo-user standard 500
 ```
 
+For an admin token that can call billing endpoints:
+
+```bash
+npm run token:dev -- admin-user pro 500 admin billing:read
+```
+
 8. Call the gateway.
 
 ```bash
@@ -103,6 +109,13 @@ curl --no-buffer \
 ```bash
 curl http://127.0.0.1:8787/v1/usage \
   -H 'Authorization: Bearer <jwt>'
+```
+
+10. Inspect admin billing state.
+
+```bash
+curl 'http://127.0.0.1:8787/v1/admin/usage?userId=demo-user&limit=10' \
+  -H 'Authorization: Bearer <admin-jwt>'
 ```
 
 ## Build
@@ -164,6 +177,24 @@ Configure any of these variables on the gateway worker to enable it:
 - `AI_GATEWAY_SKIP_CACHE=true`
 - `AI_GATEWAY_CACHE_TTL=120`
 
+## Auth Configuration
+
+Phase 2 auth supports both shared-secret and JWKS verification. See [phase-2-auth-rate-limit.md](/Users/ethan/Dev/LLM-Inference-Platform/docs/phase-2-auth-rate-limit.md).
+
+Relevant gateway variables:
+
+- `JWT_SECRET`
+- `JWT_SECRET_PREVIOUS`
+- `JWT_SECRET_NEXT`
+- `JWT_JWKS_URL`
+- `JWT_ISSUER`
+- `JWT_AUDIENCE`
+- `JWT_CLOCK_SKEW_SECONDS`
+- `JWT_JWKS_CACHE_TTL_SECONDS`
+- `RATE_LIMIT_REQUESTS_PER_MINUTE`
+- `RATE_LIMIT_RESERVATION_TTL_SECONDS`
+- `BILLING_LEDGER_LIMIT`
+
 ## CI
 
 The repo includes [ci.yml](/Users/ethan/Dev/LLM-Inference-Platform/.github/workflows/ci.yml) to run `npm ci`, `npm test`, `npm run build`, and the local smoke suite on pushes and pull requests.
@@ -186,5 +217,4 @@ GitHub configuration expected by the workflow:
 ## Remaining Gaps
 
 - External-provider fallback.
-- Stronger JWT key management such as JWKS-based verification.
 - Production observability dashboards and alerts.

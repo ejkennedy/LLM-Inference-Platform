@@ -16,6 +16,12 @@ class MemoryStorage {
   async delete(key: string): Promise<boolean> {
     return this.data.delete(key);
   }
+
+  async list<T>({ prefix = "" }: { prefix?: string } = {}): Promise<Map<string, T>> {
+    return new Map(
+      [...this.data.entries()].filter(([key]) => key.startsWith(prefix)) as Array<[string, T]>
+    );
+  }
 }
 
 function createRateLimiter() {
@@ -121,6 +127,50 @@ describe("gateway rate limiter durable object", () => {
       estimatedSpendCents: 7.5,
       remainingBudgetCents: 492.5,
       requestCountCurrentMinute: 1
+    });
+  });
+
+  it("records an admin-visible billing ledger", async () => {
+    const { limiter } = createRateLimiter();
+
+    await limiter.fetch(
+      new Request("https://rate-limiter.internal/check", {
+        method: "POST",
+        body: JSON.stringify({
+          requestId: "req-1",
+          userId: "demo-user",
+          budgetLimitCents: 500,
+          estimatedCostCents: 10
+        })
+      })
+    );
+
+    await limiter.fetch(
+      new Request("https://rate-limiter.internal/spend", {
+        method: "POST",
+        body: JSON.stringify({
+          requestId: "req-1",
+          estimatedCostCents: 10,
+          actualCostCents: 7.5
+        })
+      })
+    );
+
+    const response = await limiter.fetch(
+      new Request("https://rate-limiter.internal/admin/usage?limit=5")
+    );
+    const body = await response.json();
+
+    expect(body.userId).toBe("demo-user");
+    expect(body.activeReservations).toBe(0);
+    expect(body.recentLedger).toHaveLength(2);
+    expect(body.recentLedger[0]).toMatchObject({
+      type: "reconciliation",
+      requestId: "req-1"
+    });
+    expect(body.recentLedger[1]).toMatchObject({
+      type: "reservation",
+      requestId: "req-1"
     });
   });
 
