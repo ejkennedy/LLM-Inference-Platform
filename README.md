@@ -269,7 +269,18 @@ GitHub configuration expected by the workflow:
 - Repository or environment variable: `CLOUDFLARE_ACCOUNT_ID` or `CF_ACCOUNT_ID`
 - Environment variable: `STAGING_GATEWAY_URL` such as `https://llm-gateway-staging.<your-subdomain>.workers.dev`
 - Environment variable: `PRODUCTION_GATEWAY_URL` such as `https://llm-gateway.<your-subdomain>.workers.dev`
+- Environment secret: `STAGING_SMOKE_JWT` or `STAGING_SMOKE_JWT_SECRET`
+- Environment secret: `PRODUCTION_SMOKE_JWT` or `PRODUCTION_SMOKE_JWT_SECRET`
 - GitHub environments: `staging` and `production`
+
+The deploy workflow now runs a full authenticated remote smoke suite after deploy:
+
+- `GET /health`
+- `GET /v1/usage`
+- `POST /v1/chat`
+
+If your environment still uses shared-secret auth, set `*_SMOKE_JWT_SECRET` and the workflow will generate a smoke token automatically.
+If your environment uses Auth0/JWKS, set `*_SMOKE_JWT` to a preissued token that already contains the required claims.
 
 ## Remaining Gaps
 

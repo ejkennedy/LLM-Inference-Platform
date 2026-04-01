@@ -50,6 +50,8 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || vars.CF_ACCOUNT_ID }}
       GATEWAY_URL: ${{ vars.STAGING_GATEWAY_URL }}
+      SMOKE_JWT: ${{ secrets.STAGING_SMOKE_JWT }}
+      SMOKE_JWT_SECRET: ${{ secrets.STAGING_SMOKE_JWT_SECRET }}
 
     steps:
       - name: Validate staging deploy configuration
@@ -57,6 +59,7 @@ jobs:
           test -n "$CLOUDFLARE_API_TOKEN" || (echo "Missing CLOUDFLARE_API_TOKEN or CF_API_TOKEN secret" && exit 1)
           test -n "$CLOUDFLARE_ACCOUNT_ID" || (echo "Missing CLOUDFLARE_ACCOUNT_ID or CF_ACCOUNT_ID variable" && exit 1)
           test -n "$GATEWAY_URL" || (echo "Missing STAGING_GATEWAY_URL variable" && exit 1)
+          test -n "$SMOKE_JWT" || test -n "$SMOKE_JWT_SECRET" || (echo "Missing STAGING_SMOKE_JWT or STAGING_SMOKE_JWT_SECRET secret" && exit 1)
 
   deploy-staging-router:
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'staging')
@@ -140,12 +143,26 @@ jobs:
     environment: staging
     env:
       GATEWAY_URL: ${{ vars.STAGING_GATEWAY_URL }}
+      SMOKE_JWT: ${{ secrets.STAGING_SMOKE_JWT }}
+      SMOKE_JWT_SECRET: ${{ secrets.STAGING_SMOKE_JWT_SECRET }}
 
     steps:
-      - name: Smoke check gateway health
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run staging remote smoke suite
         run: |
           test -n "$GATEWAY_URL" || (echo "Missing STAGING_GATEWAY_URL variable" && exit 1)
-          curl --fail --silent --show-error "${GATEWAY_URL%/}/health"
+          npm run smoke:remote -- "${GATEWAY_URL%/}"
 
   deploy-production-router:
     if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'production')
@@ -181,6 +198,8 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || vars.CF_ACCOUNT_ID }}
       GATEWAY_URL: ${{ vars.PRODUCTION_GATEWAY_URL }}
+      SMOKE_JWT: ${{ secrets.PRODUCTION_SMOKE_JWT }}
+      SMOKE_JWT_SECRET: ${{ secrets.PRODUCTION_SMOKE_JWT_SECRET }}
 
     steps:
       - name: Validate production deploy configuration
@@ -188,6 +207,7 @@ jobs:
           test -n "$CLOUDFLARE_API_TOKEN" || (echo "Missing CLOUDFLARE_API_TOKEN or CF_API_TOKEN secret" && exit 1)
           test -n "$CLOUDFLARE_ACCOUNT_ID" || (echo "Missing CLOUDFLARE_ACCOUNT_ID or CF_ACCOUNT_ID variable" && exit 1)
           test -n "$GATEWAY_URL" || (echo "Missing PRODUCTION_GATEWAY_URL variable" && exit 1)
+          test -n "$SMOKE_JWT" || test -n "$SMOKE_JWT_SECRET" || (echo "Missing PRODUCTION_SMOKE_JWT or PRODUCTION_SMOKE_JWT_SECRET secret" && exit 1)
 
   deploy-production-observability:
     if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'production')
@@ -246,9 +266,23 @@ jobs:
     environment: production
     env:
       GATEWAY_URL: ${{ vars.PRODUCTION_GATEWAY_URL }}
+      SMOKE_JWT: ${{ secrets.PRODUCTION_SMOKE_JWT }}
+      SMOKE_JWT_SECRET: ${{ secrets.PRODUCTION_SMOKE_JWT_SECRET }}
 
     steps:
-      - name: Smoke check gateway health
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run production remote smoke suite
         run: |
           test -n "$GATEWAY_URL" || (echo "Missing PRODUCTION_GATEWAY_URL variable" && exit 1)
-          curl --fail --silent --show-error "${GATEWAY_URL%/}/health"
+          npm run smoke:remote -- "${GATEWAY_URL%/}"
