@@ -124,7 +124,7 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 ## Phase 5: Observability & Cost Metering
 
 - `[x]` Repo-owned Phase 5 implementation is complete
-- `[-]` Production rollout still requires Cloudflare Analytics query credentials plus Grafana Cloud datasource/import setup
+- `[-]` Staging is now operationally validated end to end; production rollout still requires Cloudflare Analytics query credentials plus Grafana Cloud datasource/import setup
 
 ### Structured logging schema
 - `[x]` Observability worker exists
@@ -178,6 +178,7 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 - `[x]` CD workflow scaffold
 - `[x]` Staging deployment validated end to end with Auth0, AI Gateway, and usage accounting
 - `[x]` Structured telemetry, aggregated cost summary, and dashboard artifacts
+- `[x]` Staging observability and cost summary validated end to end with Analytics Engine
 
 ### Highest-priority remaining work
 - `[ ]` Finish production environment setup for KV, Durable Objects, Analytics, service bindings, and secrets

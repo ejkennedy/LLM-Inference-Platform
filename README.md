@@ -319,7 +319,10 @@ If your environment still uses shared-secret auth, set `*_SMOKE_JWT_SECRET` and 
 If your environment uses Auth0/JWKS, set `*_SMOKE_JWT` to a preissued token that already contains the required claims.
 
 Current status: the staging path has been validated end to end with Auth0-issued JWTs, Cloudflare AI Gateway, normalized SSE streaming, and Durable Object usage accounting.
+Phase 5 has also now been validated in staging end to end: streaming requests publish structured telemetry, Analytics Engine stores the events, and `GET /v1/admin/cost-summary` returns non-zero request, cost, and latency aggregates.
 
 ## Remaining Gaps
 
-- Production observability dashboards and alerts.
+- Production Grafana datasource/import setup and contact-point wiring.
+- Terraform/IaC for Cloudflare resources and environment bindings.
+- Load/performance benchmarking artifacts and documented thresholds.
