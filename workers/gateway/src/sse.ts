@@ -86,9 +86,17 @@ export async function normalizeReadableAiStream(
           }
 
           if (parsed.type === "done") {
+            const totalMs = Date.now() - startTs;
             controller.enqueue(encoder.encode(toSummaryFrame(completionText, usage, finishReason)));
             controller.enqueue(encoder.encode("data: [DONE]\n\n"));
             controller.close();
+            void options?.onComplete?.({
+              completionText,
+              usage,
+              finishReason,
+              ttftMs,
+              totalMs
+            });
             return;
           }
 
