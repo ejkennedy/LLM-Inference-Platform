@@ -60,6 +60,11 @@ service = "llm-router-staging"
 binding = "OBSERVABILITY"
 service = "llm-observability-staging"
 
+[env.staging.vars]
+JWT_ISSUER = "https://dev-aib8t0groa0n7v71.us.auth0.com/"
+JWT_AUDIENCE = "https://llm-gateway"
+
+
 [env.production]
 name = "llm-gateway"
 
@@ -78,3 +83,7 @@ service = "llm-router"
 [[env.production.services]]
 binding = "OBSERVABILITY"
 service = "llm-observability"
+
+[env.production.vars]
+JWT_ISSUER = "https://dev-aib8t0groa0n7v71.us.auth0.com/"
+JWT_AUDIENCE = "https://llm-gateway"
