@@ -25,6 +25,22 @@ service = "llm-router"
 binding = "OBSERVABILITY"
 service = "llm-observability"
 
+[env.ci]
+name = "llm-gateway-ci"
+
+[env.ci.durable_objects]
+bindings = [
+  { name = "RATE_LIMITER", class_name = "RateLimiter" }
+]
+
+[[env.ci.services]]
+binding = "ROUTER"
+service = "llm-router"
+
+[[env.ci.services]]
+binding = "OBSERVABILITY"
+service = "llm-observability"
+
 [env.staging]
 name = "llm-gateway-staging"
 

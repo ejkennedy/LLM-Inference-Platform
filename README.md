@@ -134,6 +134,7 @@ npm run ci:smoke
 ```
 
 That command boots the three workers locally on fixed ports and verifies the thin Phase 1 slice end to end.
+The CI smoke gateway uses a dedicated `wrangler` `ci` environment without a live `AI` binding so the smoke path stays local and uses the built-in mock inference path.
 
 ## Router Catalogue Bootstrap
 
