@@ -286,6 +286,24 @@ The gateway exposes:
 
 - `GET /v1/admin/cost-summary`
 
+For a Cloudflare-native alerting path without Grafana, the repo also includes:
+
+- `npm run alerts:check -- <gateway-url>`
+- [observability-alerts.yml](/Users/ethan/Dev/LLM-Inference-Platform/.github/workflows/observability-alerts.yml)
+
+The alert checker reads the admin cost summary and fails when any configured threshold is exceeded:
+
+- `ALERT_MAX_ACTUAL_COST_CENTS`
+- `ALERT_MAX_ERROR_RATE`
+- `ALERT_MAX_P95_TTFT_MS`
+- optional `ALERT_MAX_P95_TOTAL_MS`
+
+It also supports:
+
+- `ALERT_JWT`
+- optional `ALERT_TENANT_ID`
+- optional `ALERT_WEBHOOK_URL` for Slack or any JSON webhook that accepts a top-level `text` field
+
 Observability query configuration:
 
 - `ANALYTICS_ACCOUNT_ID`
@@ -293,14 +311,14 @@ Observability query configuration:
 - optional `ANALYTICS_DATASET`
 - `METRICS_API_KEY` for the public Prometheus scrape endpoint
 
-Grafana provisioning artifacts live in:
+Optional Grafana provisioning artifacts live in:
 
 - [llm-platform-dashboard.json](/Users/ethan/Dev/LLM-Inference-Platform/grafana/llm-platform-dashboard.json)
 - [llm-platform-alerts.yaml](/Users/ethan/Dev/LLM-Inference-Platform/grafana/llm-platform-alerts.yaml)
 
 ## Terraform and Hardening
 
-Phase 6 adds Terraform scaffolding, a manual JWT rotation workflow, and a benchmark path. See [phase-6-ci-cd-iac-hardening.md](/Users/ethan/Dev/LLM-Inference-Platform/docs/phase-6-ci-cd-iac-hardening.md).
+Phase 6 adds Terraform scaffolding, a manual JWT rotation workflow, a benchmark path, and scheduled native alert checks. See [phase-6-ci-cd-iac-hardening.md](/Users/ethan/Dev/LLM-Inference-Platform/docs/phase-6-ci-cd-iac-hardening.md).
 
 Terraform scaffold:
 
@@ -310,6 +328,7 @@ Manual workflows:
 
 - [rotate-gateway-jwt.yml](/Users/ethan/Dev/LLM-Inference-Platform/.github/workflows/rotate-gateway-jwt.yml)
 - [benchmark.yml](/Users/ethan/Dev/LLM-Inference-Platform/.github/workflows/benchmark.yml)
+- [observability-alerts.yml](/Users/ethan/Dev/LLM-Inference-Platform/.github/workflows/observability-alerts.yml)
 
 Benchmark locally or against a deployed environment:
 
@@ -352,6 +371,6 @@ Phase 5 has also now been validated in staging end to end: streaming requests pu
 
 ## Remaining Gaps
 
-- Production Grafana datasource/import setup and contact-point wiring.
 - Terraform/IaC for Cloudflare resources and environment bindings.
 - Load/performance benchmarking artifacts and documented thresholds.
+- Production alert webhook/contact routing and scheduled-workflow verification.

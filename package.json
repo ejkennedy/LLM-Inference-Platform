@@ -14,6 +14,7 @@
     "dev:observability": "cd workers/observability && npm run dev",
     "ci:smoke": "node scripts/run_ci_smoke.mjs",
     "smoke:remote": "node scripts/remote_smoke.mjs",
+    "alerts:check": "node scripts/check_alerts.mjs",
     "seed:catalogue": "node scripts/seed_model_catalogue.mjs",
     "seed:prompts": "node scripts/seed_prompt_registry.mjs",
     "setup:local-auth": "node scripts/setup_local_auth.mjs",

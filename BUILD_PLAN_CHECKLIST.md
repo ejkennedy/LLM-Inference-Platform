@@ -124,7 +124,7 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 ## Phase 5: Observability & Cost Metering
 
 - `[x]` Repo-owned Phase 5 implementation is complete
-- `[-]` Staging is now operationally validated end to end; production rollout still requires Cloudflare Analytics query credentials plus Grafana Cloud datasource/import setup
+- `[-]` Staging is now operationally validated end to end; production rollout still requires Cloudflare Analytics query credentials and live alert/webhook configuration
 
 ### Structured logging schema
 - `[x]` Observability worker exists
@@ -138,11 +138,13 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 - `[x]` Observability worker exposes internal summary and Prometheus-style metrics endpoints
 - `[x]` Grafana dashboard provisioning artifact is committed
 - `[x]` Grafana alert rules artifact is committed
+- `[-]` Grafana remains optional; the repo now also includes a Cloudflare-native alerting path without external dashboard infrastructure
 
 ### Cost dashboard & alerts
 - `[x]` Cost dashboard provisioning artifact is committed
 - `[x]` Alert rule definitions are committed
 - `[x]` Admin cost-summary endpoint exists beyond `/v1/usage`
+- `[x]` Scheduled native alert-check workflow is committed
 
 ## Phase 6: CI/CD, IaC & Production Hardening
 
@@ -161,6 +163,7 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 - `[x]` Production deployment lane exists
 - `[x]` Post-deploy health smoke steps exist
 - `[x]` Authenticated remote smoke checks exist for deployed environments
+- `[x]` Scheduled observability alert checks exist for deployed environments
 - `[-]` Real deployment still requires repository/environment secrets and Cloudflare resource setup
 
 ### Secret rotation & zero-downtime key updates
@@ -187,9 +190,10 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 - `[x]` Staging deployment validated end to end with Auth0, AI Gateway, and usage accounting
 - `[x]` Structured telemetry, aggregated cost summary, and dashboard artifacts
 - `[x]` Staging observability and cost summary validated end to end with Analytics Engine
+- `[x]` Native scheduled alerting path using the admin cost summary endpoint
 
 ### Highest-priority remaining work
 - `[ ]` Finish production environment setup for KV, Durable Objects, Analytics, service bindings, and secrets
-- `[ ]` Wire Grafana Cloud datasource/imports and Analytics query credentials in production
 - `[ ]` Apply/import the Terraform scaffold against the production account
 - `[ ]` Run and archive production benchmark results and tighten thresholds from observed traffic
+- `[ ]` Configure production alert webhook/contact routing and verify the scheduled alert workflow

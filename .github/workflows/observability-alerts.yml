@@ -1,0 +1,91 @@
+name: Observability Alerts
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Alert target environment"
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - staging
+          - production
+
+jobs:
+  staging:
+    if: github.event_name == 'schedule' || inputs.environment == 'all' || inputs.environment == 'staging'
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      ALERT_ENVIRONMENT: staging
+      GATEWAY_URL: ${{ vars.GATEWAY_URL || vars.STAGING_GATEWAY_URL }}
+      ALERT_JWT: ${{ secrets.ALERT_JWT || secrets.STAGING_SMOKE_JWT }}
+      ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+      ALERT_TENANT_ID: ${{ vars.ALERT_TENANT_ID }}
+      ALERT_WINDOW_HOURS: ${{ vars.ALERT_WINDOW_HOURS }}
+      ALERT_MAX_ACTUAL_COST_CENTS: ${{ vars.ALERT_MAX_ACTUAL_COST_CENTS }}
+      ALERT_MAX_ERROR_RATE: ${{ vars.ALERT_MAX_ERROR_RATE }}
+      ALERT_MAX_P95_TTFT_MS: ${{ vars.ALERT_MAX_P95_TTFT_MS }}
+      ALERT_MAX_P95_TOTAL_MS: ${{ vars.ALERT_MAX_P95_TOTAL_MS }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate alert configuration
+        run: |
+          test -n "$GATEWAY_URL" || (echo "Missing GATEWAY_URL for staging" && exit 1)
+          test -n "$ALERT_JWT" || (echo "Missing ALERT_JWT or STAGING_SMOKE_JWT for staging" && exit 1)
+
+      - name: Run staging alert check
+        run: npm run alerts:check -- "${GATEWAY_URL%/}"
+
+  production:
+    if: github.event_name == 'schedule' || inputs.environment == 'all' || inputs.environment == 'production'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      ALERT_ENVIRONMENT: production
+      GATEWAY_URL: ${{ vars.GATEWAY_URL || vars.PRODUCTION_GATEWAY_URL }}
+      ALERT_JWT: ${{ secrets.ALERT_JWT || secrets.PRODUCTION_SMOKE_JWT }}
+      ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+      ALERT_TENANT_ID: ${{ vars.ALERT_TENANT_ID }}
+      ALERT_WINDOW_HOURS: ${{ vars.ALERT_WINDOW_HOURS }}
+      ALERT_MAX_ACTUAL_COST_CENTS: ${{ vars.ALERT_MAX_ACTUAL_COST_CENTS }}
+      ALERT_MAX_ERROR_RATE: ${{ vars.ALERT_MAX_ERROR_RATE }}
+      ALERT_MAX_P95_TTFT_MS: ${{ vars.ALERT_MAX_P95_TTFT_MS }}
+      ALERT_MAX_P95_TOTAL_MS: ${{ vars.ALERT_MAX_P95_TOTAL_MS }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate alert configuration
+        run: |
+          test -n "$GATEWAY_URL" || (echo "Missing GATEWAY_URL for production" && exit 1)
+          test -n "$ALERT_JWT" || (echo "Missing ALERT_JWT or PRODUCTION_SMOKE_JWT for production" && exit 1)
+
+      - name: Run production alert check
+        run: npm run alerts:check -- "${GATEWAY_URL%/}"

@@ -22,7 +22,9 @@ Phase 5 turns the earlier telemetry stub into a usable observability layer.
   - `/internal/metrics-summary`
   - `/internal/metrics/prometheus`
 - The gateway now exposes admin-only `GET /v1/admin/cost-summary`.
-- Grafana dashboard and alert provisioning artifacts live in `grafana/`.
+- The repo supports both:
+  - a Cloudflare-native alerting path using admin summaries and scheduled checks
+  - an optional Prometheus/Grafana export path through the public metrics endpoint
 
 ## Internal query model
 
@@ -57,19 +59,42 @@ The observability worker can always ingest events locally, but Analytics Engine 
 
 Recommended token permission:
 
-- `Account > Workers Analytics Engine > Read`
+- `Account > Account Analytics > Read`
 
-## Grafana Cloud path
+## Cloudflare-native alerting path
 
-The cleanest integration is:
+The simplest operational setup is:
+
+1. Set GitHub environment variable `GATEWAY_URL`.
+2. Set GitHub environment secret `ALERT_JWT`, or reuse the existing smoke JWT secret for the environment.
+3. Optionally set:
+   - `ALERT_TENANT_ID`
+   - `ALERT_WINDOW_HOURS`
+   - `ALERT_MAX_ACTUAL_COST_CENTS`
+   - `ALERT_MAX_ERROR_RATE`
+   - `ALERT_MAX_P95_TTFT_MS`
+   - `ALERT_MAX_P95_TOTAL_MS`
+   - `ALERT_WEBHOOK_URL`
+4. Enable `.github/workflows/observability-alerts.yml`.
+
+The checker script:
+
+- calls `GET /v1/admin/cost-summary`
+- evaluates cost, error rate, p95 TTFT, and optional p95 total latency
+- fails the workflow when a threshold is exceeded
+- optionally posts a webhook payload with a top-level `text` field
+
+## Optional Grafana / Prometheus path
+
+If you still want external dashboards:
 
 1. Set `METRICS_API_KEY` on the observability worker.
-2. Point a Prometheus-compatible scrape or Metrics Endpoint integration at:
+2. Expose and test:
    - `GET /metrics/prometheus`
 3. Send the header:
    - `X-Metrics-Key: <METRICS_API_KEY>`
-2. Import `grafana/llm-platform-dashboard.json`
-3. Import `grafana/llm-platform-alerts.yaml`
+4. Use Prometheus, Alloy, or another scraper to pull the endpoint and forward metrics to your external monitoring stack.
+5. Import `grafana/llm-platform-dashboard.json` and `grafana/llm-platform-alerts.yaml` if you choose Grafana.
 
 The Prometheus payload contains:
 
