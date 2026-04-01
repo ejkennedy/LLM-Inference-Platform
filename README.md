@@ -142,8 +142,8 @@ GitHub configuration expected by the workflow:
 
 - Repository or environment secret: `CLOUDFLARE_API_TOKEN` or `CF_API_TOKEN`
 - Repository or environment variable: `CLOUDFLARE_ACCOUNT_ID` or `CF_ACCOUNT_ID`
-- Environment variable: `STAGING_GATEWAY_URL`
-- Environment variable: `PRODUCTION_GATEWAY_URL`
+- Environment variable: `STAGING_GATEWAY_URL` such as `https://llm-gateway-staging.<your-subdomain>.workers.dev`
+- Environment variable: `PRODUCTION_GATEWAY_URL` such as `https://llm-gateway.<your-subdomain>.workers.dev`
 - GitHub environments: `staging` and `production`
 
 ## Remaining Gaps
