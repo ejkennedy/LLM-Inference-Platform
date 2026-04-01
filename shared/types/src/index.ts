@@ -28,6 +28,14 @@ export type GatewayRequest = {
   requestId?: string | null;
   maxTokens?: number;
   stream?: boolean;
+  promptId?: string | null;
+  promptVersion?: string | null;
+  cacheControl?: {
+    bypass?: boolean;
+    ttlSeconds?: number;
+    promptClass?: string;
+    userScoped?: boolean;
+  };
 };
 
 export type GatewayResponse = {
@@ -109,6 +117,20 @@ export type ModelCatalogueEntry = {
   enabled: boolean;
   tier: 'fast' | 'balanced' | 'premium';
   fallbackTo?: string;
+};
+
+export type PromptRegistryEntry = {
+  promptId: string;
+  version: string;
+  promptText: string;
+  checksum: string;
+  lastUpdatedBy: string;
+  cachePolicy?: {
+    promptClass?: string;
+    ttlSeconds?: number;
+    bypass?: boolean;
+    userScoped?: boolean;
+  };
 };
 
 export type ObservabilityEvent = {

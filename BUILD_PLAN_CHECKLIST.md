@@ -100,18 +100,25 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 
 ## Phase 4: Streaming, SSE & Prompt Caching
 
+- `[x]` Repo-owned Phase 4 implementation is complete
+- `[-]` Production rollout still requires real AI Gateway account/token config and prompt-registry KV provisioning for managed assets
+
 ### SSE streaming pipeline
 - `[x]` Gateway streaming works end to end
 - `[x]` Stable gateway-owned SSE contract exists now
 - `[x]` Stream emits `meta`, `token`, `usage`, `summary`, `[DONE]`
 - `[x]` Stream contract has tests
-- `[-]` Upstream cancellation/backpressure handling is still minimal
+- `[x]` Readable upstream cancellation and finish-reason preservation are implemented
 
 ### Semantic caching via AI Gateway
-- `[ ]` Not implemented
+- `[x]` Request-aware AI Gateway cache control exists
+- `[x]` Explicit cache bypass and TTL controls exist
+- `[x]` Cache debug headers are surfaced when AI Gateway HTTP routing is active
 
 ### Prompt registry in KV or R2
-- `[ ]` Not implemented
+- `[x]` Versioned prompt registry support exists in the gateway
+- `[x]` Prompt seed assets are committed
+- `[x]` Prompt registry bootstrap script exists
 
 ## Phase 5: Observability & Cost Metering
 

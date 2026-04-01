@@ -1,0 +1,28 @@
+{
+  "concise-assistant:v1": {
+    "promptId": "concise-assistant",
+    "version": "v1",
+    "promptText": "You are a concise assistant. Answer directly, precisely, and avoid filler.",
+    "checksum": "fnv1a:38dc6e8",
+    "lastUpdatedBy": "repo-seed",
+    "cachePolicy": {
+      "promptClass": "deterministic-general",
+      "ttlSeconds": 300,
+      "bypass": false,
+      "userScoped": false
+    }
+  },
+  "fresh-research:v1": {
+    "promptId": "fresh-research",
+    "version": "v1",
+    "promptText": "You are a research assistant. Prefer up-to-date factual answers and say when freshness matters.",
+    "checksum": "fnv1a:88e7f077",
+    "lastUpdatedBy": "repo-seed",
+    "cachePolicy": {
+      "promptClass": "freshness-sensitive",
+      "ttlSeconds": 0,
+      "bypass": true,
+      "userScoped": true
+    }
+  }
+}

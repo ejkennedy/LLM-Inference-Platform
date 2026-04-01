@@ -5,13 +5,14 @@ import { parseProviderSseEvent } from "../workers/gateway/src/sse";
 describe("gateway SSE normalization helpers", () => {
   it("parses provider JSON SSE events", () => {
     const event = parseProviderSseEvent(
-      'data: {"response":"hello","usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}\n\n'
+      'data: {"response":"hello","usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3},"finish_reason":"stop"}\n\n'
     );
 
     expect(event).toEqual({
       type: "data",
       response: "hello",
       error: undefined,
+      finishReason: "stop",
       usage: {
         prompt_tokens: 1,
         completion_tokens: 2,

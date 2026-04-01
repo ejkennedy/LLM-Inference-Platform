@@ -7,6 +7,7 @@ type AiStreamChunk =
       done?: boolean;
       error?: string;
       usage?: Record<string, unknown>;
+      finishReason?: string | null;
     };
 
 type StreamUsage = {
@@ -15,10 +16,22 @@ type StreamUsage = {
   totalTokens?: number;
 };
 
+type StreamMeta = {
+  requestId: string;
+  model: string;
+  promptId?: string;
+  promptVersion?: string;
+  cacheStatus?: string;
+};
+
 export async function normalizeReadableAiStream(
   stream: ReadableStream<Uint8Array>,
   requestId: string,
-  routing: RouterResponse
+  routing: RouterResponse,
+  options?: {
+    extraHeaders?: HeadersInit;
+    meta?: Partial<StreamMeta>;
+  }
 ): Promise<Response> {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
@@ -26,6 +39,7 @@ export async function normalizeReadableAiStream(
   let completionText = "";
   let pending = "";
   let usage: StreamUsage | undefined;
+  let finishReason: string | undefined;
 
   const readable = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -33,7 +47,8 @@ export async function normalizeReadableAiStream(
         encoder.encode(
           toSseFrame("meta", {
             requestId,
-            model: routing.resolvedModel
+            model: routing.resolvedModel,
+            ...options?.meta
           })
         )
       );
@@ -54,8 +69,12 @@ export async function normalizeReadableAiStream(
             continue;
           }
 
+          if (parsed.finishReason) {
+            finishReason = parsed.finishReason;
+          }
+
           if (parsed.type === "done") {
-            controller.enqueue(encoder.encode(toSummaryFrame(completionText, usage)));
+            controller.enqueue(encoder.encode(toSummaryFrame(completionText, usage, finishReason)));
             controller.enqueue(encoder.encode("data: [DONE]\n\n"));
             controller.close();
             return;
@@ -69,7 +88,7 @@ export async function normalizeReadableAiStream(
                 })
               )
             );
-            controller.enqueue(encoder.encode(toSummaryFrame(completionText, usage)));
+            controller.enqueue(encoder.encode(toSummaryFrame(completionText, usage, finishReason)));
             controller.enqueue(encoder.encode("data: [DONE]\n\n"));
             controller.close();
             return;
@@ -88,40 +107,38 @@ export async function normalizeReadableAiStream(
 
           if (parsed.usage) {
             usage = normalizeUsage(parsed.usage);
-            controller.enqueue(
-              encoder.encode(
-                toSseFrame("usage", usage)
-              )
-            );
+            controller.enqueue(encoder.encode(toSseFrame("usage", usage)));
           }
         }
       }
 
-      controller.enqueue(encoder.encode(toSummaryFrame(completionText, usage)));
+      controller.enqueue(encoder.encode(toSummaryFrame(completionText, usage, finishReason)));
       controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       controller.close();
+    },
+    async cancel() {
+      await reader.cancel();
     }
   });
 
   return new Response(readable, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-      "X-Request-Id": requestId,
-      "X-Resolved-Model": routing.resolvedModel
-    }
+    headers: buildSseHeaders(requestId, routing, options?.extraHeaders)
   });
 }
 
 export async function normalizeIterableAiStream(
   stream: AsyncIterable<AiStreamChunk>,
   requestId: string,
-  routing: RouterResponse
+  routing: RouterResponse,
+  options?: {
+    extraHeaders?: HeadersInit;
+    meta?: Partial<StreamMeta>;
+  }
 ): Promise<Response> {
   const encoder = new TextEncoder();
   let completionText = "";
   let usage: StreamUsage | undefined;
+  let finishReason: string | undefined;
 
   const readable = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -129,7 +146,8 @@ export async function normalizeIterableAiStream(
         encoder.encode(
           toSseFrame("meta", {
             requestId,
-            model: routing.resolvedModel
+            model: routing.resolvedModel,
+            ...options?.meta
           })
         )
       );
@@ -139,6 +157,10 @@ export async function normalizeIterableAiStream(
           completionText += chunk;
           controller.enqueue(encoder.encode(toSseFrame("token", { delta: chunk })));
           continue;
+        }
+
+        if (chunk.finishReason) {
+          finishReason = chunk.finishReason ?? undefined;
         }
 
         if (chunk.error) {
@@ -165,20 +187,14 @@ export async function normalizeIterableAiStream(
         }
       }
 
-      controller.enqueue(encoder.encode(toSummaryFrame(completionText, usage)));
+      controller.enqueue(encoder.encode(toSummaryFrame(completionText, usage, finishReason)));
       controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       controller.close();
     }
   });
 
   return new Response(readable, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-      "X-Request-Id": requestId,
-      "X-Resolved-Model": routing.resolvedModel
-    }
+    headers: buildSseHeaders(requestId, routing, options?.extraHeaders)
   });
 }
 
@@ -187,6 +203,7 @@ export function parseProviderSseEvent(event: string): {
   response?: string;
   error?: string;
   usage?: Record<string, unknown>;
+  finishReason?: string;
 } | null {
   const dataLines = event
     .split("\n")
@@ -208,12 +225,24 @@ export function parseProviderSseEvent(event: string): {
       response?: string | null;
       error?: string;
       usage?: Record<string, unknown>;
+      finish_reason?: string | null;
+      choices?: Array<{
+        finish_reason?: string | null;
+        delta?: { content?: string };
+      }>;
     };
     return {
       type: "data",
-      response: parsed.response ?? undefined,
+      response:
+        parsed.response
+        ?? parsed.choices?.[0]?.delta?.content
+        ?? undefined,
       error: parsed.error,
-      usage: parsed.usage
+      usage: parsed.usage,
+      finishReason:
+        parsed.finish_reason
+        ?? parsed.choices?.[0]?.finish_reason
+        ?? undefined
     };
   } catch {
     return {
@@ -223,15 +252,43 @@ export function parseProviderSseEvent(event: string): {
   }
 }
 
+function buildSseHeaders(
+  requestId: string,
+  routing: RouterResponse,
+  extraHeaders?: HeadersInit
+): Headers {
+  const headers = new Headers({
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+    "X-Request-Id": requestId,
+    "X-Resolved-Model": routing.resolvedModel
+  });
+
+  if (extraHeaders) {
+    const extras = new Headers(extraHeaders);
+    extras.forEach((value, key) => {
+      headers.set(key, value);
+    });
+  }
+
+  return headers;
+}
+
 function toSseFrame(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
-function toSummaryFrame(completionText: string, usage?: StreamUsage): string {
+function toSummaryFrame(
+  completionText: string,
+  usage?: StreamUsage,
+  finishReason?: string
+): string {
   return toSseFrame("summary", {
     completionChars: completionText.length,
     estimatedCompletionTokens: Math.max(Math.ceil(completionText.length / 4), 1),
-    usage
+    usage,
+    finishReason
   });
 }
 

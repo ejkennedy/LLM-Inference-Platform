@@ -20,6 +20,7 @@ import {
   type AuthConfig
 } from "./auth";
 import { buildProviderAllowlist, runInference } from "./provider";
+import { applyPromptEntry, resolvePromptEntry } from "./prompts";
 import {
   normalizeIterableAiStream,
   normalizeReadableAiStream
@@ -28,6 +29,7 @@ import {
 export interface Env {
   AI?: Ai;
   MODEL_CATALOGUE: KVNamespace;
+  PROMPT_REGISTRY?: KVNamespace;
   ROUTER: Fetcher;
   OBSERVABILITY: Fetcher;
   RATE_LIMITER: DurableObjectNamespace;
@@ -40,6 +42,8 @@ export interface Env {
   JWT_CLOCK_SKEW_SECONDS?: string;
   JWT_JWKS_CACHE_TTL_SECONDS?: string;
   AI_GATEWAY_ID?: string;
+  AI_GATEWAY_ACCOUNT_ID?: string;
+  AI_GATEWAY_TOKEN?: string;
   AI_GATEWAY_SKIP_CACHE?: string;
   AI_GATEWAY_CACHE_TTL?: string;
   EXTERNAL_PROVIDER_ENABLED?: string;
@@ -120,7 +124,8 @@ export default {
       const currentUsage = await getUsageSummary(env, claims.sub);
       const payload = (await request.json()) as GatewayRequest;
       const requestId = payload.requestId ?? request.headers.get("X-Request-Id") ?? crypto.randomUUID();
-      const messages = payload.messages ?? [];
+      const promptEntry = await resolvePromptEntry(env, payload);
+      const messages = applyPromptEntry(payload.messages ?? [], promptEntry);
       const promptTokensEstimate = estimatePromptTokens(messages);
 
       if (messages.length === 0) {
@@ -192,12 +197,22 @@ export default {
         messages,
         streamEnabled,
         payload.maxTokens ?? 512,
-        requestId
+        requestId,
+        payload,
+        promptEntry
       );
 
       if (streamEnabled) {
-        if (upstream instanceof ReadableStream) {
-          const response = await normalizeReadableAiStream(upstream, requestId, routing);
+        if (upstream.upstream instanceof ReadableStream) {
+          const response = await normalizeReadableAiStream(
+            upstream.upstream,
+            requestId,
+            routing,
+            {
+              extraHeaders: upstream.responseHeaders,
+              meta: upstream.meta
+            }
+          );
           ctx.waitUntil(
             recordSpend(env, claims.sub, {
               requestId,
@@ -208,7 +223,7 @@ export default {
           return withCors(response, requestId);
         }
 
-        if (!isAsyncIterable(upstream)) {
+        if (!isAsyncIterable(upstream.upstream)) {
           return withCors(
             json(
               {
@@ -222,7 +237,15 @@ export default {
           );
         }
 
-        const response = await normalizeIterableAiStream(upstream, requestId, routing);
+        const response = await normalizeIterableAiStream(
+          upstream.upstream,
+          requestId,
+          routing,
+          {
+            extraHeaders: upstream.responseHeaders,
+            meta: upstream.meta
+          }
+        );
         ctx.waitUntil(
           recordSpend(env, claims.sub, {
             requestId,
@@ -233,7 +256,7 @@ export default {
         return withCors(response, requestId);
       }
 
-      const completion = normalizeJsonCompletion(upstream, requestId, routing);
+      const completion = normalizeJsonCompletion(upstream.upstream, requestId, routing);
       ctx.waitUntil(
         Promise.all([
           recordSpend(env, claims.sub, {
@@ -252,7 +275,7 @@ export default {
         ])
       );
 
-      return withCors(json(completion), requestId);
+      return withCors(json(completion, { headers: upstream.responseHeaders }), requestId);
     } catch (error) {
       if (error instanceof Response) {
         return withCors(error);

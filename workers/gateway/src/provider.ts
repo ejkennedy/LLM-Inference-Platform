@@ -1,4 +1,9 @@
-import type { ChatMessage, RouterResponse } from "@llm-inference-platform/types";
+import type {
+  ChatMessage,
+  GatewayRequest,
+  PromptRegistryEntry,
+  RouterResponse
+} from "@llm-inference-platform/types";
 
 export type GatewayAiOptions = {
   gateway?: {
@@ -11,6 +16,8 @@ export type GatewayAiOptions = {
 export type ProviderEnv = {
   AI?: Ai;
   AI_GATEWAY_ID?: string;
+  AI_GATEWAY_ACCOUNT_ID?: string;
+  AI_GATEWAY_TOKEN?: string;
   AI_GATEWAY_SKIP_CACHE?: string;
   AI_GATEWAY_CACHE_TTL?: string;
   EXTERNAL_PROVIDER_ENABLED?: string;
@@ -30,6 +37,7 @@ type ProviderStreamChunk = {
   done?: boolean;
   error?: string;
   usage?: Record<string, unknown>;
+  finishReason?: string | null;
 };
 
 type CircuitState = {
@@ -37,37 +45,44 @@ type CircuitState = {
   openUntil?: number;
 };
 
+export type InferenceResult = {
+  upstream: unknown;
+  responseHeaders?: HeadersInit;
+  meta?: {
+    cacheStatus?: string;
+    promptId?: string;
+    promptVersion?: string;
+  };
+};
+
 const providerCircuitState = new Map<string, CircuitState>();
 
-export function buildAiRunOptions(env: {
-  AI_GATEWAY_ID?: string;
-  AI_GATEWAY_SKIP_CACHE?: string;
-  AI_GATEWAY_CACHE_TTL?: string;
-}): GatewayAiOptions | undefined {
+export function buildAiRunOptions(
+  env: {
+    AI_GATEWAY_ID?: string;
+    AI_GATEWAY_SKIP_CACHE?: string;
+    AI_GATEWAY_CACHE_TTL?: string;
+  },
+  payload?: GatewayRequest,
+  promptEntry?: PromptRegistryEntry
+): GatewayAiOptions | undefined {
   if (!env.AI_GATEWAY_ID) {
     return undefined;
   }
 
+  const policy = buildCachePolicy(env, payload, promptEntry);
   const gateway: NonNullable<GatewayAiOptions["gateway"]> = {
     id: env.AI_GATEWAY_ID
   };
 
-  const options: GatewayAiOptions = {
-    gateway
-  };
-
-  if (env.AI_GATEWAY_SKIP_CACHE === "true") {
+  if (policy.bypass) {
     gateway.skipCache = true;
   }
-
-  if (env.AI_GATEWAY_CACHE_TTL) {
-    const cacheTtl = Number(env.AI_GATEWAY_CACHE_TTL);
-    if (Number.isFinite(cacheTtl) && cacheTtl > 0) {
-      gateway.cacheTtl = cacheTtl;
-    }
+  if (!policy.bypass && policy.ttlSeconds) {
+    gateway.cacheTtl = policy.ttlSeconds;
   }
 
-  return options;
+  return { gateway };
 }
 
 export function buildGatewayMeta(requestId: string, routing: RouterResponse) {
@@ -104,25 +119,37 @@ export async function runInference(
   messages: ChatMessage[],
   stream: boolean,
   maxTokens: number,
-  requestId: string
-): Promise<unknown> {
+  requestId: string,
+  payload?: GatewayRequest,
+  promptEntry?: PromptRegistryEntry
+): Promise<InferenceResult> {
   if (routing.via === "workers-ai") {
     if (!env.AI) {
-      return createMockAiResponse(messages, stream, requestId, routing);
+      return {
+        upstream: createMockAiResponse(messages, stream, requestId, routing),
+        meta: buildMeta(promptEntry)
+      };
     }
 
-    return env.AI.run(
-      routing.cfModelId as keyof AiModels,
-      {
-        messages,
-        stream,
-        max_tokens: maxTokens
-      },
-      buildAiRunOptions(env)
-    );
+    if (env.AI_GATEWAY_ID && env.AI_GATEWAY_ACCOUNT_ID && env.AI_GATEWAY_TOKEN) {
+      return runAiGatewayInference(env, routing, messages, stream, maxTokens, payload, promptEntry);
+    }
+
+    return {
+      upstream: await env.AI.run(
+        routing.cfModelId as keyof AiModels,
+        {
+          messages,
+          stream,
+          max_tokens: maxTokens
+        },
+        buildAiRunOptions(env, payload, promptEntry)
+      ),
+      meta: buildMeta(promptEntry)
+    };
   }
 
-  return runExternalInference(env, routing, messages, stream, maxTokens);
+  return runExternalInference(env, routing, messages, stream, maxTokens, promptEntry);
 }
 
 export function createMockAiResponse(
@@ -151,8 +178,53 @@ export function createMockAiResponse(
           completion_tokens: Math.max(Math.ceil(output.length / 4), 1),
           total_tokens: Math.max(Math.ceil(output.length / 4), 1)
         },
+        finishReason: "stop",
         done: true
       };
+    }
+  };
+}
+
+async function runAiGatewayInference(
+  env: ProviderEnv,
+  routing: RouterResponse,
+  messages: ChatMessage[],
+  stream: boolean,
+  maxTokens: number,
+  payload?: GatewayRequest,
+  promptEntry?: PromptRegistryEntry
+): Promise<InferenceResult> {
+  const policy = buildCachePolicy(env, payload, promptEntry);
+  const response = await fetch(
+    `https://gateway.ai.cloudflare.com/v1/${env.AI_GATEWAY_ACCOUNT_ID}/${env.AI_GATEWAY_ID}/workers-ai/${routing.cfModelId}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "cf-aig-authorization": `Bearer ${env.AI_GATEWAY_TOKEN}`,
+        ...(policy.bypass ? { "cf-aig-skip-cache": "true" } : {}),
+        ...(!policy.bypass && policy.ttlSeconds
+          ? { "cf-aig-cache-ttl": String(policy.ttlSeconds) }
+          : {})
+      },
+      body: JSON.stringify({
+        messages,
+        stream,
+        max_tokens: maxTokens
+      })
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`AI Gateway request failed with status ${response.status}`);
+  }
+
+  return {
+    upstream: stream ? response.body ?? undefined : await response.json(),
+    responseHeaders: toGatewayDebugHeaders(response.headers, policy),
+    meta: {
+      ...buildMeta(promptEntry),
+      cacheStatus: response.headers.get("cf-aig-cache-status") ?? undefined
     }
   };
 }
@@ -162,8 +234,9 @@ async function runExternalInference(
   routing: RouterResponse,
   messages: ChatMessage[],
   stream: boolean,
-  maxTokens: number
-): Promise<AsyncIterable<ProviderStreamChunk> | { response: string; usage?: Record<string, unknown> }> {
+  maxTokens: number,
+  promptEntry?: PromptRegistryEntry
+): Promise<InferenceResult> {
   const baseUrl = env.EXTERNAL_PROVIDER_BASE_URL;
   const apiKey = env.EXTERNAL_PROVIDER_API_KEY;
 
@@ -206,7 +279,10 @@ async function runExternalInference(
   clearProviderFailures(baseUrl);
 
   if (stream) {
-    return parseExternalSse(response);
+    return {
+      upstream: parseExternalSse(response),
+      meta: buildMeta(promptEntry)
+    };
   }
 
   const payload = (await response.json()) as {
@@ -216,8 +292,40 @@ async function runExternalInference(
   };
 
   return {
-    response: readExternalContent(payload) ?? "",
-    usage: payload.usage
+    upstream: {
+      response: readExternalContent(payload) ?? "",
+      usage: payload.usage
+    },
+    meta: buildMeta(promptEntry)
+  };
+}
+
+function buildCachePolicy(
+  env: {
+    AI_GATEWAY_SKIP_CACHE?: string;
+    AI_GATEWAY_CACHE_TTL?: string;
+  },
+  payload?: GatewayRequest,
+  promptEntry?: PromptRegistryEntry
+): {
+  bypass: boolean;
+  ttlSeconds?: number;
+} {
+  const bypass =
+    payload?.cacheControl?.bypass === true
+    || payload?.cacheControl?.userScoped === true
+    || promptEntry?.cachePolicy?.bypass === true
+    || promptEntry?.cachePolicy?.userScoped === true
+    || env.AI_GATEWAY_SKIP_CACHE === "true";
+
+  const ttlSeconds =
+    payload?.cacheControl?.ttlSeconds
+    ?? promptEntry?.cachePolicy?.ttlSeconds
+    ?? parsePositiveInt(env.AI_GATEWAY_CACHE_TTL, 0);
+
+  return {
+    bypass,
+    ttlSeconds: ttlSeconds > 0 ? ttlSeconds : undefined
   };
 }
 
@@ -270,7 +378,7 @@ function parseExternalSseEvent(event: string): ProviderStreamChunk | null {
 
   const raw = lines.join("\n");
   if (raw === "[DONE]") {
-    return { done: true };
+    return { done: true, finishReason: "stop" };
   }
 
   try {
@@ -284,22 +392,23 @@ function parseExternalSseEvent(event: string): ProviderStreamChunk | null {
       error?: { message?: string } | string;
     };
     const choice = payload.choices?.[0];
-    const responseText = readExternalContent({
-      choices: [
-        {
-          message: choice?.message,
-          delta: choice?.delta
-        } as unknown as { message?: { content?: string | Array<{ type?: string; text?: string }> } }
-      ]
-    });
 
     return {
-      response: responseText || undefined,
+      response:
+        readExternalContent({
+          choices: [
+            {
+              message: choice?.message,
+              delta: choice?.delta
+            }
+          ]
+        }) || undefined,
       error:
         typeof payload.error === "string"
           ? payload.error
           : payload.error?.message,
       usage: payload.usage,
+      finishReason: choice?.finish_reason,
       done: choice?.finish_reason != null
     };
   } catch {
@@ -400,6 +509,28 @@ function withModelPrefix(model: string, prefix: string | undefined): string {
     return model;
   }
   return `${prefix}${model}`;
+}
+
+function toGatewayDebugHeaders(headers: Headers, policy: { bypass: boolean; ttlSeconds?: number }): Headers {
+  const output = new Headers();
+  const cacheStatus = headers.get("cf-aig-cache-status");
+  if (cacheStatus) {
+    output.set("cf-aig-cache-status", cacheStatus);
+  }
+  output.set("x-cache-bypass", String(policy.bypass));
+  if (policy.ttlSeconds) {
+    output.set("x-cache-ttl-seconds", String(policy.ttlSeconds));
+  }
+  return output;
+}
+
+function buildMeta(promptEntry?: PromptRegistryEntry): InferenceResult["meta"] {
+  return promptEntry
+    ? {
+        promptId: promptEntry.promptId,
+        promptVersion: promptEntry.version
+      }
+    : undefined;
 }
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {

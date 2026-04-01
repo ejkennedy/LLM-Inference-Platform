@@ -46,8 +46,29 @@ describe("gateway provider helpers", () => {
     ).toEqual({
       gateway: {
         id: "gateway-1",
-        skipCache: true,
-        cacheTtl: 120
+        skipCache: true
+      }
+    });
+  });
+
+  it("applies prompt cache policy to AI Gateway options", () => {
+    expect(
+      buildAiRunOptions(
+        {
+          AI_GATEWAY_ID: "gateway-1",
+          AI_GATEWAY_CACHE_TTL: "120"
+        },
+        {
+          messages: [],
+          cacheControl: {
+            ttlSeconds: 45
+          }
+        }
+      )
+    ).toEqual({
+      gateway: {
+        id: "gateway-1",
+        cacheTtl: 45
       }
     });
   });
@@ -107,7 +128,7 @@ describe("gateway provider helpers", () => {
       "req-1"
     );
 
-    expect(response).toMatchObject({
+    expect(response.upstream).toMatchObject({
       response: "hello from external"
     });
   });
@@ -144,13 +165,64 @@ describe("gateway provider helpers", () => {
     );
 
     const chunks = [];
-    for await (const chunk of stream as AsyncIterable<Record<string, unknown>>) {
+    for await (const chunk of stream.upstream as AsyncIterable<Record<string, unknown>>) {
       chunks.push(chunk);
     }
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(chunks[0]).toMatchObject({
       response: "hello"
+    });
+  });
+
+  it("returns AI Gateway cache headers when configured", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({ response: "hello from gateway" }),
+          {
+            status: 200,
+            headers: {
+              "cf-aig-cache-status": "HIT"
+            }
+          }
+        )
+      )
+    );
+
+    const response = await runInference(
+      {
+        AI: {} as Ai,
+        AI_GATEWAY_ID: "gateway-1",
+        AI_GATEWAY_ACCOUNT_ID: "acct",
+        AI_GATEWAY_TOKEN: "token"
+      },
+      workersRouting,
+      [{ role: "user", content: "hello" }],
+      false,
+      128,
+      "req-1",
+      {
+        messages: [],
+        cacheControl: {
+          ttlSeconds: 30
+        }
+      },
+      {
+        promptId: "concise-assistant",
+        version: "v1",
+        promptText: "Be concise.",
+        checksum: "checksum",
+        lastUpdatedBy: "tester"
+      }
+    );
+
+    expect(new Headers(response.responseHeaders).get("cf-aig-cache-status")).toBe("HIT");
+    expect(response.meta).toMatchObject({
+      cacheStatus: "HIT",
+      promptId: "concise-assistant",
+      promptVersion: "v1"
     });
   });
 

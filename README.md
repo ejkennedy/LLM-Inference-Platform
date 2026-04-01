@@ -118,6 +118,26 @@ curl 'http://127.0.0.1:8787/v1/admin/usage?userId=demo-user&limit=10' \
   -H 'Authorization: Bearer <admin-jwt>'
 ```
 
+11. Use a registered prompt template.
+
+```bash
+curl --no-buffer \
+  -X POST http://127.0.0.1:8787/v1/chat \
+  -H 'Authorization: Bearer <jwt>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "promptId": "concise-assistant",
+    "promptVersion": "v1",
+    "cacheControl": {
+      "ttlSeconds": 120
+    },
+    "messages": [
+      { "role": "user", "content": "Explain edge inference in one sentence." }
+    ],
+    "stream": true
+  }'
+```
+
 ## Build
 
 ```bash
@@ -195,6 +215,24 @@ Relevant gateway variables:
 - `EXTERNAL_PROVIDER_CIRCUIT_COOLDOWN_SECONDS`
 
 The external adapter expects an OpenAI-style `chat/completions` endpoint and supports both JSON and SSE responses.
+
+## Streaming and Prompt Registry
+
+Phase 4 adds request-aware cache controls and a versioned prompt registry. See [phase-4-streaming-cache-prompts.md](/Users/ethan/Dev/LLM-Inference-Platform/docs/phase-4-streaming-cache-prompts.md).
+
+Prompt registry assets are seeded from [prompt-registry.seed.json](/Users/ethan/Dev/LLM-Inference-Platform/workers/gateway/prompt-registry.seed.json).
+
+To seed a real Cloudflare KV namespace:
+
+```bash
+PROMPT_REGISTRY_NAMESPACE_ID=<namespace-id> npm run seed:prompts -- staging
+```
+
+Or:
+
+```bash
+PROMPT_REGISTRY_NAMESPACE_ID=<namespace-id> npm run seed:prompts -- production
+```
 
 ## Auth Configuration
 
