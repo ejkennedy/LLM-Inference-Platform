@@ -71,6 +71,9 @@ AI_GATEWAY_CACHE_TTL = "300"
 binding = "PROMPT_REGISTRY"
 id = "0408593d3ef44a91ad983d6f2400ebc1"
 
+[[env.staging.analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "llm_requests"
 
 
 [env.production]
@@ -102,3 +105,7 @@ AI_GATEWAY_CACHE_TTL = "300"
 [[env.production.kv_namespaces]]
 binding = "PROMPT_REGISTRY"
 id = "6a368deb93384096906642b2787c324a"
+
+[[env.production.analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "llm_requests"
