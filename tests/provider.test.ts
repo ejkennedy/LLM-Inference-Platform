@@ -37,7 +37,7 @@ describe("gateway provider helpers", () => {
     });
   });
 
-  it("creates a gateway-shaped mock SSE stream", async () => {
+  it("creates provider-style mock stream chunks for normalization", async () => {
     const stream = createMockAiResponse(
       [{ role: "user", content: "hello" }],
       true,
@@ -45,13 +45,14 @@ describe("gateway provider helpers", () => {
       routing
     );
 
-    expect(stream).toBeInstanceOf(ReadableStream);
-    const response = new Response(stream as ReadableStream);
-    const body = await response.text();
+    const chunks = [];
+    for await (const chunk of stream as AsyncIterable<Record<string, unknown>>) {
+      chunks.push(chunk);
+    }
 
-    expect(body).toContain("event: meta");
-    expect(body).toContain("event: token");
-    expect(body).toContain("event: summary");
-    expect(body).toContain("data: [DONE]");
+    expect(chunks.some((chunk) => typeof chunk.response === "string")).toBe(true);
+    expect(chunks.at(-1)).toMatchObject({
+      done: true
+    });
   });
 });

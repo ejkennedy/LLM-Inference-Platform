@@ -52,9 +52,9 @@ export function buildGatewayMeta(requestId: string, routing: RouterResponse) {
 export function createMockAiResponse(
   messages: ChatMessage[],
   stream: boolean,
-  requestId: string,
+  _requestId: string,
   routing: RouterResponse
-): ReadableStream<Uint8Array> | { response: string } {
+): AsyncIterable<{ response?: string; done?: boolean; usage?: Record<string, unknown> }> | { response: string } {
   const userPrompt = messages.at(-1)?.content ?? "Hello from the mock gateway";
   const output = `Mock response for "${userPrompt}" via ${routing.resolvedModel}.`;
 
@@ -62,21 +62,21 @@ export function createMockAiResponse(
     return { response: output };
   }
 
-  const encoder = new TextEncoder();
-  const frames = [
-    `event: meta\ndata: ${JSON.stringify(buildGatewayMeta(requestId, routing))}\n\n`,
-    `event: token\ndata: ${JSON.stringify({ text: output })}\n\n`,
-    "event: usage\ndata: {\"promptTokens\":0,\"completionTokens\":0,\"totalTokens\":0}\n\n",
-    `event: summary\ndata: ${JSON.stringify({ finishReason: "stop" })}\n\n`,
-    "data: [DONE]\n\n"
-  ];
-
-  return new ReadableStream<Uint8Array>({
-    start(controller) {
-      for (const frame of frames) {
-        controller.enqueue(encoder.encode(frame));
+  return {
+    async *[Symbol.asyncIterator]() {
+      for (const token of output.split(" ")) {
+        yield {
+          response: `${token} `
+        };
       }
-      controller.close();
+      yield {
+        usage: {
+          prompt_tokens: 0,
+          completion_tokens: Math.max(Math.ceil(output.length / 4), 1),
+          total_tokens: Math.max(Math.ceil(output.length / 4), 1)
+        },
+        done: true
+      };
     }
-  });
+  };
 }
