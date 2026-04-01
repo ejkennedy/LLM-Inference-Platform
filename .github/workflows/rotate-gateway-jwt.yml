@@ -1,0 +1,55 @@
+name: Rotate Gateway JWT Secrets
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Gateway environment to rotate"
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  rotate:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || vars.CF_ACCOUNT_ID }}
+      JWT_SECRET_ACTIVE: ${{ secrets.JWT_SECRET_ACTIVE }}
+      JWT_SECRET_PREVIOUS: ${{ secrets.JWT_SECRET_PREVIOUS }}
+      JWT_SECRET_NEXT: ${{ secrets.JWT_SECRET_NEXT }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate rotation configuration
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || (echo "Missing CLOUDFLARE_API_TOKEN or CF_API_TOKEN secret" && exit 1)
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || (echo "Missing CLOUDFLARE_ACCOUNT_ID or CF_ACCOUNT_ID variable" && exit 1)
+          test -n "$JWT_SECRET_ACTIVE" || (echo "Missing JWT_SECRET_ACTIVE secret" && exit 1)
+          test -n "$JWT_SECRET_NEXT" || (echo "Missing JWT_SECRET_NEXT secret" && exit 1)
+
+      - name: Push gateway JWT secrets
+        run: |
+          printf '%s' "$JWT_SECRET_ACTIVE" | npx wrangler secret put JWT_SECRET --config workers/gateway/wrangler.toml --env "${{ inputs.environment }}"
+          if [ -n "$JWT_SECRET_PREVIOUS" ]; then
+            printf '%s' "$JWT_SECRET_PREVIOUS" | npx wrangler secret put JWT_SECRET_PREVIOUS --config workers/gateway/wrangler.toml --env "${{ inputs.environment }}"
+          fi
+          printf '%s' "$JWT_SECRET_NEXT" | npx wrangler secret put JWT_SECRET_NEXT --config workers/gateway/wrangler.toml --env "${{ inputs.environment }}"
+
+      - name: Redeploy gateway
+        run: npx wrangler deploy --config workers/gateway/wrangler.toml --env "${{ inputs.environment }}"

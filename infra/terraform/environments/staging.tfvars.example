@@ -1,0 +1,5 @@
+account_id         = "f8cd483b056259da8aeb8817b2135da4"
+environment        = "staging"
+workers_subdomain  = "ethank-kennedy"
+ai_gateway_id      = "llm-platform-staging"
+analytics_dataset  = "llm_requests"
