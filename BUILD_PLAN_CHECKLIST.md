@@ -164,6 +164,7 @@ Source of truth: [cf_llm_build_plan.html](/Users/ethan/Dev/LLM-Inference-Platfor
 - `[x]` Post-deploy health smoke steps exist
 - `[x]` Authenticated remote smoke checks exist for deployed environments
 - `[x]` Scheduled observability alert checks exist for deployed environments
+- `[x]` Dedicated production verification workflow exists without requiring a deploy step
 - `[-]` Real deployment still requires repository/environment secrets and Cloudflare resource setup
 
 ### Secret rotation & zero-downtime key updates

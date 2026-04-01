@@ -329,6 +329,7 @@ Manual workflows:
 - [rotate-gateway-jwt.yml](/Users/ethan/Dev/LLM-Inference-Platform/.github/workflows/rotate-gateway-jwt.yml)
 - [benchmark.yml](/Users/ethan/Dev/LLM-Inference-Platform/.github/workflows/benchmark.yml)
 - [observability-alerts.yml](/Users/ethan/Dev/LLM-Inference-Platform/.github/workflows/observability-alerts.yml)
+- [verify-production.yml](/Users/ethan/Dev/LLM-Inference-Platform/.github/workflows/verify-production.yml)
 
 Benchmark locally or against a deployed environment:
 
@@ -365,6 +366,14 @@ The deploy workflow now runs a full authenticated remote smoke suite after deplo
 
 If your environment still uses shared-secret auth, set `*_SMOKE_JWT_SECRET` and the workflow will generate a smoke token automatically.
 If your environment uses Auth0/JWKS, set `*_SMOKE_JWT` to a preissued token that already contains the required claims.
+
+For a production-only verification pipeline without deploys, use [verify-production.yml](/Users/ethan/Dev/LLM-Inference-Platform/.github/workflows/verify-production.yml). It runs:
+
+- `npm run smoke:remote`
+- `npm run alerts:check`
+- `npm run benchmark:gateway`
+
+against the production gateway on a schedule or manual dispatch.
 
 Current status: the staging path has been validated end to end with Auth0-issued JWTs, Cloudflare AI Gateway, normalized SSE streaming, and Durable Object usage accounting.
 Phase 5 has also now been validated in staging end to end: streaming requests publish structured telemetry, Analytics Engine stores the events, and `GET /v1/admin/cost-summary` returns non-zero request, cost, and latency aggregates.

@@ -1,0 +1,71 @@
+name: Verify Production
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+jobs:
+  verify-production:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      GATEWAY_URL: ${{ vars.GATEWAY_URL || vars.PRODUCTION_GATEWAY_URL }}
+      SMOKE_JWT: ${{ secrets.SMOKE_JWT || secrets.PRODUCTION_SMOKE_JWT }}
+      SMOKE_JWT_SECRET: ${{ secrets.SMOKE_JWT_SECRET || secrets.PRODUCTION_SMOKE_JWT_SECRET }}
+      ALERT_JWT: ${{ secrets.ALERT_JWT || secrets.PRODUCTION_SMOKE_JWT }}
+      ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+      ALERT_TENANT_ID: ${{ vars.ALERT_TENANT_ID }}
+      ALERT_WINDOW_HOURS: ${{ vars.ALERT_WINDOW_HOURS }}
+      ALERT_MAX_ACTUAL_COST_CENTS: ${{ vars.ALERT_MAX_ACTUAL_COST_CENTS }}
+      ALERT_MAX_ERROR_RATE: ${{ vars.ALERT_MAX_ERROR_RATE }}
+      ALERT_MAX_P95_TTFT_MS: ${{ vars.ALERT_MAX_P95_TTFT_MS }}
+      ALERT_MAX_P95_TOTAL_MS: ${{ vars.ALERT_MAX_P95_TOTAL_MS }}
+      BENCHMARK_JWT: ${{ secrets.BENCHMARK_JWT || secrets.ALERT_JWT || secrets.PRODUCTION_SMOKE_JWT }}
+      BENCHMARK_REQUESTS: ${{ vars.BENCHMARK_REQUESTS }}
+      BENCHMARK_CONCURRENCY: ${{ vars.BENCHMARK_CONCURRENCY }}
+      BENCHMARK_THRESHOLD_P95_TTFT_MS: ${{ vars.BENCHMARK_THRESHOLD_P95_TTFT_MS }}
+      BENCHMARK_THRESHOLD_P95_TOTAL_MS: ${{ vars.BENCHMARK_THRESHOLD_P95_TOTAL_MS }}
+      BENCHMARK_THRESHOLD_ERROR_RATE: ${{ vars.BENCHMARK_THRESHOLD_ERROR_RATE }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate production verification config
+        run: |
+          test -n "$GATEWAY_URL" || (echo "Missing GATEWAY_URL or PRODUCTION_GATEWAY_URL" && exit 1)
+          test -n "$SMOKE_JWT" || test -n "$SMOKE_JWT_SECRET" || (echo "Missing SMOKE_JWT or SMOKE_JWT_SECRET" && exit 1)
+          test -n "$ALERT_JWT" || test -n "$SMOKE_JWT" || (echo "Missing ALERT_JWT or PRODUCTION_SMOKE_JWT" && exit 1)
+          test -n "$BENCHMARK_JWT" || test -n "$SMOKE_JWT" || (echo "Missing BENCHMARK_JWT, ALERT_JWT, or PRODUCTION_SMOKE_JWT" && exit 1)
+
+      - name: Run remote smoke suite
+        run: npm run smoke:remote -- "${GATEWAY_URL%/}"
+
+      - name: Run alert threshold checks
+        run: npm run alerts:check -- "${GATEWAY_URL%/}"
+
+      - name: Run production benchmark
+        run: |
+          npm run benchmark:gateway -- "${GATEWAY_URL%/}" \
+            --requests "${BENCHMARK_REQUESTS:-20}" \
+            --concurrency "${BENCHMARK_CONCURRENCY:-4}" \
+            --threshold-p95-ttft-ms "${BENCHMARK_THRESHOLD_P95_TTFT_MS:-5000}" \
+            --threshold-p95-total-ms "${BENCHMARK_THRESHOLD_P95_TOTAL_MS:-15000}" \
+            --threshold-error-rate "${BENCHMARK_THRESHOLD_ERROR_RATE:-0.01}" \
+            --out benchmarks/production-report.json
+
+      - name: Upload verification artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-verification-report
+          path: benchmarks/production-report.json

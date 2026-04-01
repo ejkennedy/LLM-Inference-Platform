@@ -74,6 +74,7 @@ These should be tightened once production traffic is observed.
 The scheduled alert workflow is:
 
 - `.github/workflows/observability-alerts.yml`
+- `.github/workflows/verify-production.yml` for production-only end-to-end verification without deploys
 
 It runs every 15 minutes and can also be dispatched manually for:
 
@@ -106,3 +107,30 @@ Compatibility fallbacks:
 - if `GATEWAY_URL` is not set, the workflow falls back to `STAGING_GATEWAY_URL` or `PRODUCTION_GATEWAY_URL`
 
 When thresholds are breached, the job fails and optionally sends a JSON webhook payload with a top-level `text` field.
+
+## Production verification pipeline
+
+The repo also includes:
+
+- `.github/workflows/verify-production.yml`
+
+It runs on a schedule and manual dispatch against the production gateway only.
+
+Checks included:
+
+- authenticated remote smoke suite
+- alert threshold evaluation
+- latency/error benchmark with artifact upload
+
+Recommended production GitHub environment configuration:
+
+- variable `GATEWAY_URL` or `PRODUCTION_GATEWAY_URL`
+- secret `PRODUCTION_SMOKE_JWT` or `SMOKE_JWT`
+- secret `ALERT_JWT`
+- optional secret `BENCHMARK_JWT`
+- optional benchmark threshold variables:
+  - `BENCHMARK_REQUESTS`
+  - `BENCHMARK_CONCURRENCY`
+  - `BENCHMARK_THRESHOLD_P95_TTFT_MS`
+  - `BENCHMARK_THRESHOLD_P95_TOTAL_MS`
+  - `BENCHMARK_THRESHOLD_ERROR_RATE`
